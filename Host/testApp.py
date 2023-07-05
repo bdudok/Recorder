@@ -1,23 +1,20 @@
 # GUI
 import sys
 from pyqtgraph import Qt
+import zmq
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
 from Host.HostSocket import Socket as HostSocket
 from Client.ClientSocket import Socket as ClientSocket
 
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, socket, title='Main'):
+    def __init__(self, app, port=5555, title='Main'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
-        if socket == 'client':
-            self.socket = ClientSocket()
-        elif socket == 'host':
-            self.socket = HostSocket()
-            # self.socket.gui=self
-        else:
-            print('Bad socket')
+        context = zmq.Context()
+        self.socket = context.socket(zmq.REP)
+        self.socket.bind(f"tcp://*:{port}")
 
         #central widget
         centralwidget = QtWidgets.QWidget(self)
@@ -39,21 +36,34 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout.addWidget(self.response_label)
 
         # button
-        if socket == 'host':
-            listen_button = QtWidgets.QPushButton('Listen', )
-            horizontal_layout.addWidget(listen_button)
-            send_button.clicked.connect(self.socket.listen)
+        listen_button = QtWidgets.QPushButton('Listen', )
+        horizontal_layout.addWidget(listen_button)
+        send_button.clicked.connect(self.listen)
 
         self.setCentralWidget(centralwidget)
         self.centralWidget().setLayout(horizontal_layout)
         self.show()
-        if socket == 'host':
-            self.socket.listen()
+
+        self.listen()
 
     def send(self):
         message = self.input_field.text()
-        response = self.socket.send(message)
+        self.socket.send_string(message)
+
+        response = self.socket.recv_string()
         self.response_label.setText(response)
+
+    def listen(self):
+        #  Wait for next request from client
+        print('listening')
+        message = self.socket.recv_string()
+        self.response_label.setText(message)
+        #  Send reply back to client
+        print(message)
+        self.socket.send_string(message)
+
+
+
 
 
 def launch_GUI(*args, **kwargs):
@@ -63,3 +73,6 @@ def launch_GUI(*args, **kwargs):
     app.setFont(font)
     gui_main = GUI_main(app, *args, **kwargs)
     sys.exit(app.exec())
+
+if __name__ == '__main__':
+    launch_GUI(title='Host')
