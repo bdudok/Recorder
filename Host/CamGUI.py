@@ -6,31 +6,34 @@ from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import json
 import zmq
 
-#in this test, zmq listener will run in separate loop. ideally, it would generate qt events
+'''
+App for displaying camera preview, setting exposure time, and saving stream during recording
+Acquisition start controlled by the recorder client
+'''
+
+
+#in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
     def __init__(self, app, port=5555, title='Main'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
 
-        #socket
+        # this process will act as server, and listen to the port for settings and commands to start/stop acquisition
         context = zmq.Context()
         self.server = context.socket(zmq.REP)
         self.server.bind(f"tcp://*:{port}")
-        # self.poller = zmq.Poller()
-        # self.poller.register(self.server, zmq.POLLIN)
 
         #set variables
         self.exposure_time = 7
         self.pollinterval = 1000
-        self.tcount = 0
 
         #central widget
         centralwidget = QtWidgets.QWidget(self)
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
-        #input
+        #slider for exposure time
         self.exposure_setting = QtWidgets.QSlider(Qt.Horizontal)
         self.exposure_setting.setMinimum(1)
         self.exposure_setting.setMaximum(100)
@@ -38,20 +41,19 @@ class GUI_main(QtWidgets.QMainWindow):
         self.exposure_setting.setTickPosition(QtWidgets.QSlider.TicksBelow)
         self.exposure_setting.setTickInterval(5)
         self.exposure_setting.valueChanged.connect(self.exposure_update)
-
         horizontal_layout.addWidget(self.exposure_setting)
 
         self.exposure_label = QtWidgets.QLabel(str(self.exposure_time), )
         horizontal_layout.addWidget(self.exposure_label)
 
-        # button
+        # button to 'Arm' for recording
         self.arm_toggle = QtWidgets.QPushButton()
         self.arm_toggle.setCheckable(True)
         self.set_switch_state('arm')
         horizontal_layout.addWidget(self.arm_toggle)
         self.arm_toggle.clicked.connect(self.arm)
 
-        # label
+        # label to display prefix
         self.filename_label = QtWidgets.QLabel('...', )
         horizontal_layout.addWidget(self.filename_label)
 
@@ -67,6 +69,9 @@ class GUI_main(QtWidgets.QMainWindow):
         self.filename_label.setText(prefix)
 
     def set_switch_state(self, state):
+        # we will have a base state when exposure can be modified, stream not saved
+        # after 'arming', exposure is fixed, listening to requests from client
+        # when acquisition running, all controls are disabled
         if state == 'armed':
             self.arm_toggle.setStyleSheet("background-color : green")
             self.arm_toggle.setText('Armed')
@@ -78,10 +83,13 @@ class GUI_main(QtWidgets.QMainWindow):
             self.arm_toggle.setText('Acquiring')
 
     def arm(self):
+        #the two states of the button. nb a 3rd state is controlled by the client.
+        # could clean this up by handling the state in a consolidated method
         self.armed = self.arm_toggle.isChecked()
         if self.armed:
             self.set_switch_state('armed')
             self.exposure_setting.setEnabled(False)
+            #will poll request queue periodically
             self.timer = QtCore.QTimer()
             self.timer.setInterval(self.pollinterval)
             self.timer.timeout.connect(self.listen)
@@ -94,8 +102,8 @@ class GUI_main(QtWidgets.QMainWindow):
             self.timer.stop()
 
     def listen(self):
-        # print(f'timer running {self.tcount}')
-        # self.tcount += 1
+        # poll the request queue, and respond if anything.
+        # not in cycle, non-blocking, called periodically by a Qt timer
         if (self.server.poll(self.pollinterval*0.01) & zmq.POLLIN) != 0:
             request = json.loads(self.server.recv_json())
             print(request)
@@ -116,27 +124,6 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.arm()
                 message = {'stop': True}
                 self.server.send_json(json.dumps(message))
-
-
-
-    # def oldget(self):
-    #     message = self.input_field.text()
-    #     self.socket.send_string(message)
-    #
-    #     response = self.socket.recv_string()
-    #     self.response_label.setText(response)
-    #
-    # def listen(self):
-    #     #  Wait for next request from client
-    #     print('listening')
-    #     message = self.socket.recv_string()
-    #     self.response_label.setText(message)
-    #     #  Send reply back to client
-    #     print(message)
-    #     self.socket.send_string(message)
-
-
-
 
 
 def launch_GUI(*args, **kwargs):

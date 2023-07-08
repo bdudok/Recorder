@@ -6,25 +6,36 @@ from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import json
 import zmq
 
+
+'''
+App for starting all connected recorders with the same prefix.
+Each recorder needs to listen to a separate port for requests
+'''
+
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, port=5555, title='Main'):
+    def __init__(self, app, cam_port=5555, title='Main'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
+
+        #set up connections to each server
         context = zmq.Context()
          #cam connection
         self.cam_socket = context.socket(zmq.REQ)
-        self.cam_socket.connect(f"tcp://localhost:{port}")
-        self.state = 'setup'
+        self.cam_socket.connect(f"tcp://localhost:{cam_port}")
 
+        # list of all sockets to start and stop for each session
         self.sockets = [('cam', self.cam_socket),]
+
+        # a state variable
+        self.state = 'setup'
 
         #central widget
         centralwidget = QtWidgets.QWidget(self)
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
-        #input
+        #prefix
         self.input_field = QtWidgets.QLineEdit(self)
         horizontal_layout.addWidget(self.input_field)
 
@@ -34,7 +45,7 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self.send)
 
-        # label
+        # label (now displays exposure time from cam, make groupboxes for each recorder later)
         self.response_label = QtWidgets.QLabel('...', )
         self.response_label.setWordWrap(True)
         horizontal_layout.addWidget(self.response_label)
@@ -44,7 +55,9 @@ class GUI_main(QtWidgets.QMainWindow):
         self.show()
 
     def send(self):
+        # Button will either set up recorders, start them, or stop them, depending on current state
         if self.state == 'setup':
+            #check in with each recorder, and exchange settings info
             success = True
 
             #set up camera
