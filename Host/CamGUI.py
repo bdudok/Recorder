@@ -3,7 +3,7 @@ import sys
 from PyQt5.QtCore import Qt
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
-# network
+import json
 import zmq
 
 #in this test, zmq listener will run in separate loop. ideally, it would generate qt events
@@ -41,6 +41,9 @@ class GUI_main(QtWidgets.QMainWindow):
 
         horizontal_layout.addWidget(self.exposure_setting)
 
+        self.exposure_label = QtWidgets.QLabel(str(self.exposure_time), )
+        horizontal_layout.addWidget(self.exposure_label)
+
         # button
         self.arm_toggle = QtWidgets.QPushButton()
         self.arm_toggle.setCheckable(True)
@@ -58,6 +61,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
+        self.exposure_label.setText(str(self.exposure_time))
 
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
@@ -90,14 +94,28 @@ class GUI_main(QtWidgets.QMainWindow):
             self.timer.stop()
 
     def listen(self):
-        print(f'timer running {self.tcount}')
-        self.tcount += 1
+        # print(f'timer running {self.tcount}')
+        # self.tcount += 1
         if (self.server.poll(self.pollinterval*0.01) & zmq.POLLIN) != 0:
-            request = self.server.recv_json()
+            request = json.loads(self.server.recv_json())
             print(request)
-            if 'prefix' in request:
+            if 'set' in request:
                 self.set_prefix(request['prefix'])
-            self.set_switch_state('running')
+                message = {'set': True, 'exposure': self.exposure_time}
+                self.server.send_json(json.dumps(message))
+                self.arm_toggle.setEnabled(False)
+            elif 'go' in request:
+                self.set_switch_state('running')
+                message = {'go': True}
+                self.server.send_json(json.dumps(message))
+            elif 'stop' in request:
+                self.timer.stop()
+                self.set_switch_state('arm')
+                self.arm_toggle.setEnabled(True)
+                self.arm_toggle.setChecked(False)
+                self.arm()
+                message = {'stop': True}
+                self.server.send_json(json.dumps(message))
 
 
 
