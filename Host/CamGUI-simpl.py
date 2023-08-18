@@ -1,7 +1,10 @@
 # GUI
 import sys
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
+from PyQt5.QtGui import QPixmap, QImage
+from Camera import nncam
+from Camera.simplest import App as CamApp
 
 import json
 import zmq
@@ -10,8 +13,6 @@ import zmq
 App for displaying camera preview, setting exposure time, and saving stream during recording
 Acquisition start controlled by the recorder client
 '''
-
-
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
     def __init__(self, app, port=5555, title='Main'):
@@ -24,22 +25,38 @@ class GUI_main(QtWidgets.QMainWindow):
         self.server = context.socket(zmq.REP)
         self.server.bind(f"tcp://*:{port}")
 
+        #open camera
+        a = nncam.Nncam.EnumV2()
+        self.cam = nncam.Nncam.Open(a[0].id)
+        self.bits = 24
+        # print(a[i].id, 'connected')
+        self.sz = self.cam.get_Size()  # width, height
+        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
+        self.buf = bytes(self.bufsize)
+        self.set_exptime()
+        self.cam.put_AutoExpoEnable(0)
+        self.pDate = None
+
         #set variables
-        self.exposure_time = 7
+        self.exposure_time = 4
         self.pollinterval = 1000
+        self.vidres = (1440, 1080)
+        self.framerate = 30
 
         #central widget
+        self.setMinimumSize(1024, 768)
         centralwidget = QtWidgets.QWidget(self)
+        vertical_layout = QtWidgets.QVBoxLayout()
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
         #slider for exposure time
         self.exposure_setting = QtWidgets.QSlider(Qt.Horizontal)
         self.exposure_setting.setMinimum(1)
-        self.exposure_setting.setMaximum(100)
+        self.exposure_setting.setMaximum(30)
         self.exposure_setting.setValue(self.exposure_time)
         self.exposure_setting.setTickPosition(QtWidgets.QSlider.TicksBelow)
-        self.exposure_setting.setTickInterval(5)
+        self.exposure_setting.setTickInterval(2)
         self.exposure_setting.valueChanged.connect(self.exposure_update)
         horizontal_layout.addWidget(self.exposure_setting)
 
@@ -53,17 +70,36 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout.addWidget(self.arm_toggle)
         self.arm_toggle.clicked.connect(self.arm)
 
+        # self.test_button = QtWidgets.QPushButton()
+        # self.test_button.setText('Pull')
+        # horizontal_layout.addWidget(self.test_button)
+        # self.test_button.clicked.connect(self.pullImage)
+
         # label to display prefix
         self.filename_label = QtWidgets.QLabel('...', )
         horizontal_layout.addWidget(self.filename_label)
 
+        #image
+        self.lbl_video = QtWidgets.QLabel()
+        self.lbl_video.resize(1024, 768)
+
         self.setCentralWidget(centralwidget)
-        self.centralWidget().setLayout(horizontal_layout)
+        vertical_layout.addLayout(horizontal_layout)
+        vertical_layout.addWidget(self.lbl_video)
+        self.centralWidget().setLayout(vertical_layout)
+
+        #start live view
+        self.cam.StartPullModeWithCallback(self.cameraCallback, self)
+
         self.show()
+
+    def set_exptime(self, ms=8):
+        self.cam.put_ExpoTime(int(ms * 1000))
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
         self.exposure_label.setText(str(self.exposure_time))
+        self.set_exptime(float(self.exposure_time))
 
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
@@ -81,6 +117,29 @@ class GUI_main(QtWidgets.QMainWindow):
         elif state == 'running':
             self.arm_toggle.setStyleSheet("background-color : blue")
             self.arm_toggle.setText('Acquiring')
+
+    @staticmethod
+    def cameraCallback(nEvent, ctx):
+        if nEvent == nncam.NNCAM_EVENT_IMAGE:
+            ctx.CameraCallback(nEvent)
+
+    def CameraCallback(self, nEvent):
+        if nEvent == nncam.NNCAM_EVENT_IMAGE:
+            try:
+                self.cam.PullImageV3(self.buf, 0, 24, 0, None)
+                self.preview_update()
+                # print('pull image ok')#, total = {}'.format(self.total))
+            except nncam.HRESULTException as ex:
+                print('pull image failed, hr=0x{:x}'.format(ex.hr & 0xffffffff))
+        else:
+            print('event callback: {}'.format(nEvent))
+
+    def preview_update(self):
+        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
+        newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
+                                Qt.FastTransformation)
+        self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
+        print('Frame grabbed')
 
     def arm(self):
         #the two states of the button. nb a 3rd state is controlled by the client.
@@ -135,4 +194,4 @@ def launch_GUI(*args, **kwargs):
     sys.exit(app.exec())
 
 if __name__ == '__main__':
-    launch_GUI(title='CamHost', port=5555)
+    launch_GUI(title='Camera', port=5555)
