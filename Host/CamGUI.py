@@ -1,6 +1,6 @@
 # GUI
 import sys
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 from PyQt5.QtGui import QPixmap, QImage
 from Camera import nncam
@@ -11,7 +11,7 @@ import zmq
 
 '''
 App for displaying camera preview, setting exposure time, and saving stream during recording
-Acquisition start controlled by the recorder client
+Acquisition start controlled by the recorder client (RecorderGUI)
 '''
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
@@ -35,7 +35,12 @@ class GUI_main(QtWidgets.QMainWindow):
         self.buf = bytes(self.bufsize)
         self.set_exptime()
         self.cam.put_AutoExpoEnable(0)
+        self.cam.put_VFlip(1)
         self.pDate = None
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.onTimer)
+        self.is_writing = False
+        self.outfile = None
 
         #set variables
         self.exposure_time = 4
@@ -46,11 +51,13 @@ class GUI_main(QtWidgets.QMainWindow):
         #central widget
         self.setMinimumSize(1024, 768)
         centralwidget = QtWidgets.QWidget(self)
-        vertical_layout = QtWidgets.QVBoxLayout()
+        grid_layout = QtWidgets.QGridLayout()
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
         #slider for exposure time
+        extime_label = QtWidgets.QLabel('Exposure (ms)')
+        horizontal_layout.addWidget(extime_label)
         self.exposure_setting = QtWidgets.QSlider(Qt.Horizontal)
         self.exposure_setting.setMinimum(1)
         self.exposure_setting.setMaximum(30)
@@ -62,6 +69,9 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.exposure_label = QtWidgets.QLabel(str(self.exposure_time), )
         horizontal_layout.addWidget(self.exposure_label)
+
+        self.lbl_frame = QtWidgets.QLabel('FPS')
+        horizontal_layout.addWidget(self.lbl_frame)
 
         # button to 'Arm' for recording
         self.arm_toggle = QtWidgets.QPushButton()
@@ -76,7 +86,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # self.test_button.clicked.connect(self.pullImage)
 
         # label to display prefix
-        self.filename_label = QtWidgets.QLabel('...', )
+        self.filename_label = QtWidgets.QLabel('Waiting for recorder', )
         horizontal_layout.addWidget(self.filename_label)
 
         #image
@@ -84,13 +94,13 @@ class GUI_main(QtWidgets.QMainWindow):
         self.lbl_video.resize(1024, 768)
 
         self.setCentralWidget(centralwidget)
-        vertical_layout.addLayout(horizontal_layout)
-        vertical_layout.addWidget(self.lbl_video)
-        self.centralWidget().setLayout(vertical_layout)
+        grid_layout.addLayout(horizontal_layout, 0, 0, 1, 8)
+        grid_layout.addWidget(self.lbl_video, 1, 0, 8, 10)
+        self.centralWidget().setLayout(grid_layout)
 
         #start live view
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
-
+        self.timer.start(int(1000/self.framerate))
         self.show()
 
     def set_exptime(self, ms=8):
@@ -103,6 +113,11 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
+
+    def set_handle(self, handle):
+        self.outfile_handle = handle
+
+        print('Saving file:', handle)
 
     def set_switch_state(self, state):
         # we will have a base state when exposure can be modified, stream not saved
@@ -134,12 +149,18 @@ class GUI_main(QtWidgets.QMainWindow):
         else:
             print('event callback: {}'.format(nEvent))
 
+    def onTimer(self):
+        if self.cam:
+            nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
+            self.lbl_frame.setText("{}, fps = {:.1f}".format(nTotalFrame, nFrame * 1000.0 / nTime))
+
     def preview_update(self):
-        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
+        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)#.mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
                                 Qt.FastTransformation)
         self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
-        print('Frame grabbed')
+        # self.onTimer()
+        # print('Frame grabbed')
 
     def arm(self):
         #the two states of the button. nb a 3rd state is controlled by the client.
@@ -168,6 +189,7 @@ class GUI_main(QtWidgets.QMainWindow):
             print(request)
             if 'set' in request:
                 self.set_prefix(request['prefix'])
+                self.set_handle(request['handle'])
                 message = {'set': True, 'exposure': self.exposure_time}
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)

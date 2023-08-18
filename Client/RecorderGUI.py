@@ -1,5 +1,6 @@
 # GUI
 import sys
+import os
 from pyqtgraph import Qt
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
@@ -18,6 +19,11 @@ class GUI_main(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
         self.app = app
 
+        #default parameters
+        self.wdir = 'E:/_Recorder'
+        self.project = 'Test'
+        self.prefix = 'Animal_DDMMYYYY_experiment_001'
+
         #set up connections to each server
         context = zmq.Context()
          #cam connection
@@ -35,9 +41,32 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
+        #path
+        p_layout = QtWidgets.QVBoxLayout()
+        path_label = QtWidgets.QLabel('Path')
+        p_layout.addWidget(path_label)
+        self.select_path_button = QtWidgets.QPushButton(self.wdir)
+        p_layout.addWidget(self.select_path_button)
+        self.select_path_button.clicked.connect(self.select_path_callback)
+        horizontal_layout.addLayout(p_layout)
+
+        #project
+        pr_layout = QtWidgets.QVBoxLayout()
+        project_label = QtWidgets.QLabel('Project')
+        pr_layout.addWidget(project_label)
+        self.project_field = QtWidgets.QLineEdit(self)
+        self.project_field.setText(self.project)
+        pr_layout.addWidget(self.project_field)
+        horizontal_layout.addLayout(pr_layout)
+
         #prefix
-        self.input_field = QtWidgets.QLineEdit(self)
-        horizontal_layout.addWidget(self.input_field)
+        pf_layout = QtWidgets.QVBoxLayout()
+        prefix_label = QtWidgets.QLabel('Prefix')
+        pf_layout.addWidget(prefix_label)
+        self.prefix_field = QtWidgets.QLineEdit(self)
+        self.prefix_field.setText(self.prefix)
+        pf_layout.addWidget(self.prefix_field)
+        horizontal_layout.addLayout(pf_layout)
 
         # button
         self.send_button = QtWidgets.QPushButton('Record', )
@@ -50,9 +79,16 @@ class GUI_main(QtWidgets.QMainWindow):
         self.response_label.setWordWrap(True)
         horizontal_layout.addWidget(self.response_label)
 
+        self.setMinimumSize(1024, 98)
         self.setCentralWidget(centralwidget)
         self.centralWidget().setLayout(horizontal_layout)
         self.show()
+
+    def select_path_callback(self, path=None):
+        #get a folder
+        # if path is None:
+        self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
+        self.select_path_button.setText(self.wdir)
 
     def send(self):
         # Button will either set up recorders, start them, or stop them, depending on current state
@@ -60,8 +96,12 @@ class GUI_main(QtWidgets.QMainWindow):
             #check in with each recorder, and exchange settings info
             success = True
 
+            #get file handle
+            self.file_handle = '/'.join((self.wdir, self.project_field.text(), self.prefix_field.text()))
+            print(self.file_handle)
+
             #set up camera
-            message = json.dumps({'set': True, 'prefix': self.input_field.text()})
+            message = json.dumps({'set': True, 'prefix': self.prefix_field.text(), 'handle': self.file_handle})
             self.cam_socket.send_json(message)
 
             response = json.loads(self.cam_socket.recv_json())
