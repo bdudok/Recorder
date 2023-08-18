@@ -4,7 +4,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 from PyQt5.QtGui import QPixmap, QImage
 from Camera import nncam
-from Camera.simplest import App as CamApp
+import cv2
+
 
 import json
 import zmq
@@ -20,7 +21,17 @@ class GUI_main(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
         self.app = app
 
-        # this process will act as server, and listen to the port for settings and commands to start/stop acquisition
+        #set variables
+        self.exposure_time = 4
+        self.pollinterval = 1000
+        self.vidres = (1440, 1080)
+        self.framerate = 30
+        self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
+        #option 1: we can have a Qt timer run on a set interval (below actual frame rate), and always save the current buffer
+        #option 2: we can set the frame rate close to the desired rate, and save every frame. try 2 for now at 30 fps.
+        #option 3: we can run a trigger and save every triggered frame, but if the trigger times are not explicitly saved, it may not help.
+
+        # this process will act as zmq server, and listen to the port for settings and commands to start/stop acquisition
         context = zmq.Context()
         self.server = context.socket(zmq.REP)
         self.server.bind(f"tcp://*:{port}")
@@ -30,6 +41,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.cam = nncam.Nncam.Open(a[0].id)
         self.bits = 24
         # print(a[i].id, 'connected')
+        self.cam.put_Speed(self.camspeed)
         self.sz = self.cam.get_Size()  # width, height
         self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
         self.buf = bytes(self.bufsize)
@@ -37,16 +49,14 @@ class GUI_main(QtWidgets.QMainWindow):
         self.cam.put_AutoExpoEnable(0)
         self.cam.put_VFlip(1)
         self.pDate = None
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.onTimer)
+
+        #set up output
+        # self.timer = QTimer(self)
+        # self.timer.timeout.connect(self.onTimer)
         self.is_writing = False
         self.outfile = None
+        self.fourcc = cv2.VideoWriter_fourcc(*'3IVD')
 
-        #set variables
-        self.exposure_time = 4
-        self.pollinterval = 1000
-        self.vidres = (1440, 1080)
-        self.framerate = 30
 
         #central widget
         self.setMinimumSize(1024, 768)
@@ -100,7 +110,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #start live view
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
-        self.timer.start(int(1000/self.framerate))
+        # self.timer.start(int(1000/self.framerate))
         self.show()
 
     def set_exptime(self, ms=8):
@@ -116,7 +126,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def set_handle(self, handle):
         self.outfile_handle = handle
-
+        self.outfile = cv2.VideoWriter(handle, self.fourcc, self.framerate, self.sz)
         print('Saving file:', handle)
 
     def set_switch_state(self, state):
@@ -132,6 +142,7 @@ class GUI_main(QtWidgets.QMainWindow):
         elif state == 'running':
             self.arm_toggle.setStyleSheet("background-color : blue")
             self.arm_toggle.setText('Acquiring')
+            self.is_writing = True
 
     @staticmethod
     def cameraCallback(nEvent, ctx):
@@ -155,7 +166,9 @@ class GUI_main(QtWidgets.QMainWindow):
             self.lbl_frame.setText("{}, fps = {:.1f}".format(nTotalFrame, nFrame * 1000.0 / nTime))
 
     def preview_update(self):
-        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)#.mirrored(False, True)
+        if self.is_writing:
+            self.outfile.write()
+        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888).convertToFormat(QImage.Format_Grayscale8)#.mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
                                 Qt.FastTransformation)
         self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
