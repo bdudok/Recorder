@@ -75,11 +75,12 @@ if __name__ == '__main__':
     # pm = QPixmap.fromImage(image) #does not work if an app is not running
     # a = numpy.frombuffer(d, dtype='uint8')
     # imd = a.reshape((3, app.sz[1], app.sz[0])) #this is a disaster
-    g = image.convertToFormat(QImage.Format_Grayscale8)
-    s = g.bits().asstring(app.sz[0] * app.sz[1] )
-    arr = numpy.fromstring(s, dtype='uint8').reshape((app.sz[1], app.sz[0], 1)) #this works, but flipped
-    arr3 = numpy.fromstring(image, dtype='uint8').reshape((app.sz[1], app.sz[0], 1))
+    # g = image.convertToFormat(QImage.Format_Grayscale8)
+    # s = g.bits().asstring(app.sz[0] * app.sz[1] )
+    # arr = numpy.fromstring(s, dtype='uint8').reshape((app.sz[1], app.sz[0], 1)) #this works, but flipped
+    arr1 = numpy.frombuffer(d, dtype='uint8').reshape((app.sz[1], app.sz[0], 3))
+    # arr3 = numpy.fromstring(image, dtype='uint8').reshape((app.sz[1], app.sz[0], 1))
 
-    qimage2ndarray.raw_view(g) #this works too, but flipped
+    # qimage2ndarray.raw_view(g) #this works too, but flipped
     #TODO: for writer, supply isColor = true at init to the feed with grey images
     # im = cv2.

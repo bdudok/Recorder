@@ -99,6 +99,10 @@ class GUI_main(QtWidgets.QMainWindow):
             #get file handle
             self.file_handle = '/'.join((self.wdir, self.project_field.text(), self.prefix_field.text()))
             print(self.file_handle)
+            wdir = os.path.dirname(self.file_handle)
+            if not os.path.exists(wdir):
+                os.mkdir(wdir)
+                print('Creating folder:', wdir)
 
             #set up camera
             message = json.dumps({'set': True, 'prefix': self.prefix_field.text(), 'handle': self.file_handle})

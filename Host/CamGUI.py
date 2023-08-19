@@ -1,5 +1,6 @@
 # GUI
 import sys
+import numpy
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 from PyQt5.QtGui import QPixmap, QImage
@@ -55,7 +56,8 @@ class GUI_main(QtWidgets.QMainWindow):
         # self.timer.timeout.connect(self.onTimer)
         self.is_writing = False
         self.outfile = None
-        self.fourcc = cv2.VideoWriter_fourcc(*'3IVD')
+        self.fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        self.file_ext = '.avi'
 
 
         #central widget
@@ -125,9 +127,10 @@ class GUI_main(QtWidgets.QMainWindow):
         self.filename_label.setText(prefix)
 
     def set_handle(self, handle):
-        self.outfile_handle = handle
-        self.outfile = cv2.VideoWriter(handle, self.fourcc, self.framerate, self.sz)
+        self.outfile_handle = handle+self.file_ext
+        self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', handle)
+        self.frame_counter = 0
 
     def set_switch_state(self, state):
         # we will have a base state when exposure can be modified, stream not saved
@@ -137,6 +140,9 @@ class GUI_main(QtWidgets.QMainWindow):
             self.arm_toggle.setStyleSheet("background-color : green")
             self.arm_toggle.setText('Armed')
         elif state == 'arm':
+            if self.is_writing:
+                self.is_writing = False
+                self.outfile.release()
             self.arm_toggle.setStyleSheet("background-color : red")
             self.arm_toggle.setText('Arm')
         elif state == 'running':
@@ -167,7 +173,11 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def preview_update(self):
         if self.is_writing:
-            self.outfile.write()
+            arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
+            #TODO: check this conversion. output file now works but likely garbled frames
+            self.outfile.write(arr)
+            self.frame_counter += 1
+            print(self.frame_counter)
         image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888).convertToFormat(QImage.Format_Grayscale8)#.mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
                                 Qt.FastTransformation)
