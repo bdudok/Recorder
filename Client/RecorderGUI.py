@@ -148,7 +148,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
             #set up camera
             message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
-            self.cam_response_label.setStyleSheet("background-color : yellow")
+            self.cam_response_label.setStyleSheet("background-color : lightred")
             self.app.processEvents()
             self.cam_socket.send_json(message)
 

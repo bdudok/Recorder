@@ -27,6 +27,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.pollinterval = 1000
         self.vidres = (1440, 1080)
         self.framerate = 30
+        self.fpsvals = []
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
         #option 1: we can have a Qt timer run on a set interval (below actual frame rate), and always save the current buffer
         #option 2: we can set the frame rate close to the desired rate, and save every frame. try 2 for now at 30 fps.
@@ -125,8 +126,6 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def set_handle(self, handle):
         self.outfile_handle = handle+self.file_ext
-        if self.outfile is not None:
-            self.outfile = None
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', handle)
         self.frame_counter = 0
@@ -141,6 +140,7 @@ class GUI_main(QtWidgets.QMainWindow):
         elif state == 'arm':
             if self.is_writing:
                 self.is_writing = False
+                QTimer.singleShot(2000, self.release_outfile)
             self.arm_toggle.setStyleSheet("background-color : red")
             self.arm_toggle.setText('Arm')
         elif state == 'running':
@@ -148,6 +148,9 @@ class GUI_main(QtWidgets.QMainWindow):
             self.arm_toggle.setText('Acquiring')
             self.is_writing = True
 
+    def release_outfile(self):
+        if self.outfile is not None:
+            self.outfile = None
     @staticmethod
     def cameraCallback(nEvent, ctx):
         if nEvent == nncam.NNCAM_EVENT_IMAGE:
@@ -167,7 +170,10 @@ class GUI_main(QtWidgets.QMainWindow):
     def update_fps(self):
         if self.cam:
             nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
-            self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, nFrame * 1000.0 / nTime))
+            fps = nFrame * 1000.0 / nTime
+            self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
+            if self.is_writing:
+                self.fpsvals.append(fps)
 
     def preview_update(self):
         if self.is_writing:
@@ -215,6 +221,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.set_handle(request['handle'])
                 logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}'
                 message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
+                #TODO this entry is not in the output
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)
             elif 'go' in request:
@@ -226,8 +233,9 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.set_switch_state('arm')
                 self.arm_toggle.setEnabled(True)
                 self.arm_toggle.setChecked(False)
-                self.arm()
-                message = {'stop': True, 'log': f'{self.frame_counter} frames captured'}
+                self.arm() #TODO this dos not work, not rearmed after acq
+                message = {'stop': True, 'log': f'{self.exposure_time} ms exp, {self.frame_counter} frames captured, {numpy.mean(self.fpsvals)} fps'}
+                self.fpsvals = []
                 self.server.send_json(json.dumps(message))
 
 
