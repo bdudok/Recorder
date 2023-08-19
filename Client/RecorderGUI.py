@@ -134,6 +134,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def send(self):
         # Button will either set up recorders, start them, or stop them, depending on current state
+        #TODO set timeouts for recv
         if self.state == 'setup':
             #check in with each recorder, and exchange settings info
             success = True
@@ -151,14 +152,15 @@ class GUI_main(QtWidgets.QMainWindow):
             self.cam_response_label.setStyleSheet("background-color : lightred")
             self.app.processEvents()
             self.cam_socket.send_json(message)
-
-
+            sname = 'cam'
             response = json.loads(self.cam_socket.recv_json())
             if not response['set']:
                 success = False
                 self.cam_response_label.setStyleSheet("background-color : red")
                 print('Cam setup failed:', response)
             else:
+                if 'log' in response:
+                    self.log.w(sname + ' responds ' + response['log'])
                 self.cam_response_label.setStyleSheet("background-color : green")
 
 
@@ -238,7 +240,7 @@ class logger:
     def w(self, message):
         ts = datetime.datetime.now().isoformat(timespec='seconds')
         self.s += ts + ':' + message + '\n'
-        # print(message)
+        print(ts, message)
 
     def dump(self):
         if self.f is not None:

@@ -118,7 +118,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
-        QtWidgets.QLabel(f'Exposure: {self.exposure_time} ms')
+        self.exposure_label.setText(f'Exposure: {self.exposure_time} ms')
         self.set_exptime(float(self.exposure_time))
 
     def set_prefix(self, prefix):
@@ -180,6 +180,9 @@ class GUI_main(QtWidgets.QMainWindow):
             arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
             #TODO: check this conversion. output file now works but likely garbled frames
             self.outfile.write(arr)
+            #TODO check if there's a way to pass buffer to writer
+            #test camera in mono
+            #test triggering, may require not starting the camera (stopping it on arm)
             self.frame_counter += 1
             print(self.frame_counter)
             if self.frame_counter % self.framerate:
@@ -234,7 +237,8 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.arm_toggle.setEnabled(True)
                 self.arm_toggle.setChecked(False)
                 self.arm() #TODO this dos not work, not rearmed after acq
-                message = {'stop': True, 'log': f'{self.exposure_time} ms exp, {self.frame_counter} frames captured, {numpy.mean(self.fpsvals)} fps'}
+                logstring = f'{self.frame_counter} frames captured, {numpy.mean(self.fpsvals):.2f} fps'
+                message = {'stop': True, 'log': logstring}
                 self.fpsvals = []
                 self.server.send_json(json.dumps(message))
 
