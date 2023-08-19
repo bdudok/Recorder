@@ -68,8 +68,8 @@ class GUI_main(QtWidgets.QMainWindow):
 
         # add widgets
         #slider for exposure time
-        extime_label = QtWidgets.QLabel('Exposure (ms)')
-        horizontal_layout.addWidget(extime_label)
+        self.exposure_label = QtWidgets.QLabel(f'Exposure: {self.exposure_time} ms')
+        horizontal_layout.addWidget(self.exposure_label)
         self.exposure_setting = QtWidgets.QSlider(Qt.Horizontal)
         self.exposure_setting.setMinimum(1)
         self.exposure_setting.setMaximum(30)
@@ -78,9 +78,6 @@ class GUI_main(QtWidgets.QMainWindow):
         self.exposure_setting.setTickInterval(2)
         self.exposure_setting.valueChanged.connect(self.exposure_update)
         horizontal_layout.addWidget(self.exposure_setting)
-
-        self.exposure_label = QtWidgets.QLabel(str(self.exposure_time), )
-        horizontal_layout.addWidget(self.exposure_label)
 
         self.lbl_frame = QtWidgets.QLabel('FPS')
         horizontal_layout.addWidget(self.lbl_frame)
@@ -120,7 +117,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
-        self.exposure_label.setText(str(self.exposure_time))
+        QtWidgets.QLabel(f'Exposure: {self.exposure_time} ms')
         self.set_exptime(float(self.exposure_time))
 
     def set_prefix(self, prefix):
@@ -128,6 +125,8 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def set_handle(self, handle):
         self.outfile_handle = handle+self.file_ext
+        if self.outfile is not None:
+            self.outfile = None
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', handle)
         self.frame_counter = 0
@@ -142,7 +141,6 @@ class GUI_main(QtWidgets.QMainWindow):
         elif state == 'arm':
             if self.is_writing:
                 self.is_writing = False
-                self.outfile.release()
             self.arm_toggle.setStyleSheet("background-color : red")
             self.arm_toggle.setText('Arm')
         elif state == 'running':
@@ -166,10 +164,10 @@ class GUI_main(QtWidgets.QMainWindow):
         else:
             print('event callback: {}'.format(nEvent))
 
-    def onTimer(self):
+    def update_fps(self):
         if self.cam:
             nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
-            self.lbl_frame.setText("{}, fps = {:.1f}".format(nTotalFrame, nFrame * 1000.0 / nTime))
+            self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, nFrame * 1000.0 / nTime))
 
     def preview_update(self):
         if self.is_writing:
@@ -178,6 +176,8 @@ class GUI_main(QtWidgets.QMainWindow):
             self.outfile.write(arr)
             self.frame_counter += 1
             print(self.frame_counter)
+            if self.frame_counter % self.framerate:
+                self.update_fps()
         image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888).convertToFormat(QImage.Format_Grayscale8)#.mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
                                 Qt.FastTransformation)
@@ -213,7 +213,8 @@ class GUI_main(QtWidgets.QMainWindow):
             if 'set' in request:
                 self.set_prefix(request['prefix'])
                 self.set_handle(request['handle'])
-                message = {'set': True, 'exposure': self.exposure_time}
+                logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}'
+                message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)
             elif 'go' in request:
@@ -226,7 +227,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.arm_toggle.setEnabled(True)
                 self.arm_toggle.setChecked(False)
                 self.arm()
-                message = {'stop': True}
+                message = {'stop': True, 'log': f'{self.frame_counter} frames captured'}
                 self.server.send_json(json.dumps(message))
 
 

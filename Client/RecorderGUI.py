@@ -3,7 +3,7 @@ import sys
 import os
 from pyqtgraph import Qt
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
-
+import datetime
 import json
 import zmq
 
@@ -21,8 +21,8 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #default parameters
         self.wdir = 'E:/_Recorder'
-        self.project = 'Test'
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
+        self.path = None
 
         #set up connections to each server
         context = zmq.Context()
@@ -43,8 +43,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # add widgets
         #path
         p_layout = QtWidgets.QVBoxLayout()
-        path_label = QtWidgets.QLabel('Path')
-        p_layout.addWidget(path_label)
+        p_layout.addWidget(QtWidgets.QLabel('Path'))
         self.select_path_button = QtWidgets.QPushButton(self.wdir)
         p_layout.addWidget(self.select_path_button)
         self.select_path_button.clicked.connect(self.select_path_callback)
@@ -52,21 +51,43 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #project
         pr_layout = QtWidgets.QVBoxLayout()
-        project_label = QtWidgets.QLabel('Project')
-        pr_layout.addWidget(project_label)
+        pr_layout.addWidget(QtWidgets.QLabel('Project'))
         self.project_field = QtWidgets.QLineEdit(self)
-        self.project_field.setText(self.project)
+        self.project_field.setText('Test')
         pr_layout.addWidget(self.project_field)
         horizontal_layout.addLayout(pr_layout)
 
+        #animal
+        a_layout = QtWidgets.QVBoxLayout()
+        a_layout.addWidget(QtWidgets.QLabel('Animal'))
+        self.animal_field = QtWidgets.QLineEdit(self)
+        self.animal_field.setText('Animal')
+        a_layout.addWidget(self.animal_field)
+        horizontal_layout.addLayout(a_layout)
+
+        #day
+        d_layout = QtWidgets.QVBoxLayout()
+        d_layout.addWidget(QtWidgets.QLabel('Date'))
+        self.date_field = QtWidgets.QLineEdit(self)
+        self.date_field.setText(datetime.date.today().isoformat())
+        d_layout.addWidget(self.date_field)
+        horizontal_layout.addLayout(d_layout)
+
         #prefix
         pf_layout = QtWidgets.QVBoxLayout()
-        prefix_label = QtWidgets.QLabel('Prefix')
-        pf_layout.addWidget(prefix_label)
+        pf_layout.addWidget(QtWidgets.QLabel('Experiment'))
         self.prefix_field = QtWidgets.QLineEdit(self)
-        self.prefix_field.setText(self.prefix)
+        self.prefix_field.setText('movie')
         pf_layout.addWidget(self.prefix_field)
         horizontal_layout.addLayout(pf_layout)
+
+        #counter
+        c_layout = QtWidgets.QVBoxLayout()
+        c_layout.addWidget(QtWidgets.QLabel('Counter'))
+        self.counter_field = QtWidgets.QLineEdit(self)
+        self.counter_field.setText('000')
+        c_layout.addWidget(self.counter_field)
+        horizontal_layout.addLayout(c_layout)
 
         # button
         self.send_button = QtWidgets.QPushButton('Record', )
@@ -74,21 +95,42 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self.send)
 
-        # label (now displays exposure time from cam, make groupboxes for each recorder later)
-        self.response_label = QtWidgets.QLabel('...', )
-        self.response_label.setWordWrap(True)
-        horizontal_layout.addWidget(self.response_label)
+        # label layout
+        label_layout = QtWidgets.QVBoxLayout()
+        #add a color button for each host
+        self.cam_response_label = QtWidgets.QLabel('Camera', )
+        self.cam_response_label.setStyleSheet("background-color : grey")
+        label_layout.addWidget(self.cam_response_label)
+        self.treadmill_response_label = QtWidgets.QLabel('Treadmill', )
+        self.treadmill_response_label.setStyleSheet("background-color : grey")
+        label_layout.addWidget(self.treadmill_response_label)
+        horizontal_layout.addLayout(label_layout)
 
         self.setMinimumSize(1024, 98)
         self.setCentralWidget(centralwidget)
         self.centralWidget().setLayout(horizontal_layout)
         self.show()
 
-    def select_path_callback(self, path=None):
+    def select_path_callback(self):
         #get a folder
-        # if path is None:
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
         self.select_path_button.setText(self.wdir)
+        self.update_folder()
+
+
+    def update_folder(self):
+        self.path = '/'.join((self.wdir, self.project_field.text(), ))
+        if not os.path.exists(self.path):
+            os.mkdir(self.path)
+            print('Creating folder:', self.path)
+            self.counter_field.setText('000')
+        else:
+            flist = [fn for fn in os.listdir(self.path) if '.log.' in fn]
+            counters = [fn.split('.')[0].split('_')[-1] for fn in flist]
+            c = len(flist)
+            while f'{c:03}' in counters:
+                c += 1
+            self.counter_field.setText(f'{c:03}')
 
     def send(self):
         # Button will either set up recorders, start them, or stop them, depending on current state
@@ -97,27 +139,36 @@ class GUI_main(QtWidgets.QMainWindow):
             success = True
 
             #get file handle
-            self.file_handle = '/'.join((self.wdir, self.project_field.text(), self.prefix_field.text()))
+            if self.path is None:
+                self.update_folder()
+            fn = '_'.join((self.animal_field.text(), self.date_field.text(),
+                           self.prefix_field.text(), self.counter_field.text()))
+            self.file_handle = '/'.join((self.path, fn))
             print(self.file_handle)
-            wdir = os.path.dirname(self.file_handle)
-            if not os.path.exists(wdir):
-                os.mkdir(wdir)
-                print('Creating folder:', wdir)
 
             #set up camera
-            message = json.dumps({'set': True, 'prefix': self.prefix_field.text(), 'handle': self.file_handle})
+            message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+            self.cam_response_label.setStyleSheet("background-color : yellow")
+            self.app.processEvents()
             self.cam_socket.send_json(message)
 
+
             response = json.loads(self.cam_socket.recv_json())
-            self.response_label.setText(str(response['exposure']))
             if not response['set']:
                 success = False
-                print('Cam setup failed')
+                self.cam_response_label.setStyleSheet("background-color : red")
+                print('Cam setup failed:', response)
+            else:
+                self.cam_response_label.setStyleSheet("background-color : green")
+
 
             if success:
                 self.set_switch_state('set')
 
         elif self.state == 'set':
+            #start log
+            self.log = logger(self.file_handle+'.log.txt')
+            self.log.w('Recording start')
             #start all connections
             success = True
             message = json.dumps({'go': True})
@@ -128,19 +179,35 @@ class GUI_main(QtWidgets.QMainWindow):
                 if not response['go']:
                     success = False
                     print('Failed starting', sname)
+                    self.log.w(sname + ' start failed')
+                else:
+                    self.log.w(sname + ' running')
 
             if success:
                 self.set_switch_state('go')
+            self.log.dump()
 
         elif self.state == 'recording':
             #stop all connections
+            self.log.w('stopping')
             message = json.dumps({'stop': True})
             for sname, socket in self.sockets:
                 socket.send_json(message)
+            buttons = {'cam': self.cam_response_label}
             for sname, socket in self.sockets:
                 response = json.loads(socket.recv_json())
+                if 'log' in response:
+                    self.log.w(sname + ' responds ' + response['log'])
+                    buttons[sname].setStyleSheet("background-color : lightgreen")
                 if not response['stop']:
                     print('Failed stopping', sname)
+                    self.log.w(sname + ' not responding to stop')
+                    buttons[sname].setStyleSheet("background-color : red")
+                    self.log.dump()
+            self.log.w('end of log')
+            self.log.cl()
+            #increment counter
+            self.update_folder()
 
             self.set_switch_state('ready')
 
@@ -160,6 +227,30 @@ class GUI_main(QtWidgets.QMainWindow):
             self.send_button.setText('Acquiring')
             self.state = 'recording'
 
+class logger:
+    def __init__(self, handle):
+        if handle is None:
+            self.f = None
+        else:
+            self.f = open(handle, 'a')
+        self.s = ''
+
+    def w(self, message):
+        ts = datetime.datetime.now().isoformat(timespec='seconds')
+        self.s += ts + ':' + message + '\n'
+        # print(message)
+
+    def dump(self):
+        if self.f is not None:
+            self.f.write(self.s)
+            self.f.flush()
+            os.fsync(self.f.fileno())
+        self.s = ''
+
+    def cl(self):
+        if self.f is not None:
+            self.f.write(self.s)
+            self.f.close()
 
 
 
