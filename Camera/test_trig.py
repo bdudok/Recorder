@@ -39,7 +39,7 @@ class App:
         self.hcam.put_VFlip(1)
 
         #try set to raw
-        self.hcam.put_Option(nncam.NNCAM_OPTION_RAW, 1) #works. if using, set bufsize to 8
+        # self.hcam.put_Option(nncam.NNCAM_OPTION_RAW, 1) #works. if using, set bufsize to 8
 
         #try set to external trigger
         gpio0 = 0x02

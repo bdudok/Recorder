@@ -17,7 +17,7 @@ Acquisition start controlled by the recorder client (RecorderGUI)
 '''
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, port=5555, title='Main'):
+    def __init__(self, app, port=5555, title='Cam'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
@@ -29,6 +29,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.framerate = 30
         self.fpsvals = []
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
+        self.format = '24rgb' # 24rgb works, working on implementing 8grey, future:16rgb (for zero padded 12 raw data)
+        assert self.format in ('24rgb', '8grey')
         #option 1: we can have a Qt timer run on a set interval (below actual frame rate), and always save the current buffer
         #option 2: we can set the frame rate close to the desired rate, and save every frame. try 2 for now at 30 fps.
         #option 3: we can run a trigger and save every triggered frame, but if the trigger times are not explicitly saved, it may not help.
@@ -41,7 +43,13 @@ class GUI_main(QtWidgets.QMainWindow):
         #open camera
         a = nncam.Nncam.EnumV2()
         self.cam = nncam.Nncam.Open(a[0].id)
-        self.bits = 24
+        if self.format == '24rgb':
+            self.bits = 24
+        elif self.format == '8grey':
+            self.bits = 8
+            self.cam.put_Option(nncam.NNCAM_OPTION_RAW, 1)
+        self.fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        self.file_ext = '.avi'
         # print(a[i].id, 'connected')
         self.cam.put_Speed(self.camspeed)
         self.sz = self.cam.get_Size()  # width, height
@@ -57,8 +65,8 @@ class GUI_main(QtWidgets.QMainWindow):
         # self.timer.timeout.connect(self.onTimer)
         self.is_writing = False
         self.outfile = None
-        self.fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-        self.file_ext = '.avi'
+
+
 
 
         #central widget
@@ -126,7 +134,10 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def set_handle(self, handle):
         self.outfile_handle = handle+self.file_ext
-        self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
+        is_color = self.format in ('24rgb',)
+        shape = (self.sz[0], self.sz[1])
+        self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, shape, is_color)
+
         print('Saving file:', handle)
         self.frame_counter = 0
 
@@ -177,17 +188,20 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def preview_update(self):
         if self.is_writing:
-            arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
-            #TODO: check this conversion. output file now works but likely garbled frames
+            if self.format in ('24rgb'):
+                arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
+            elif self.format in ('8grey'):
+                arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0]))
             self.outfile.write(arr)
             #TODO check if there's a way to pass buffer to writer
-            #test camera in mono
-            #test triggering, may require not starting the camera (stopping it on arm)
             self.frame_counter += 1
             print(self.frame_counter)
             if self.frame_counter % self.framerate:
                 self.update_fps()
-        image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888).convertToFormat(QImage.Format_Grayscale8)#.mirrored(False, True)
+        if self.format in ('24rgb'):
+            image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
+        elif self.format in ('8grey'):
+            image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_Grayscale8).mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
                                 Qt.FastTransformation)
         self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
@@ -235,7 +249,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.timer.stop()
                 self.set_switch_state('arm')
                 self.arm_toggle.setEnabled(True)
-                self.arm_toggle.setChecked(False)
+                self.arm_toggle.setChecked(True)
                 self.arm() #TODO this dos not work, not rearmed after acq
                 logstring = f'{self.frame_counter} frames captured, {numpy.mean(self.fpsvals):.2f} fps'
                 message = {'stop': True, 'log': logstring}

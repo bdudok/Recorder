@@ -14,7 +14,7 @@ Each recorder needs to listen to a separate port for requests
 '''
 
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, cam_port=5555, title='Main'):
+    def __init__(self, app, cam_port=5555, treadmill_port=5556, title='Recorder'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
@@ -29,9 +29,14 @@ class GUI_main(QtWidgets.QMainWindow):
          #cam connection
         self.cam_socket = context.socket(zmq.REQ)
         self.cam_socket.connect(f"tcp://localhost:{cam_port}")
+         #treadmill connection
+        self.trm_socket = context.socket(zmq.REQ)
+        self.trm_socket.connect(f"tcp://localhost:{treadmill_port}")
 
         # list of all sockets to start and stop for each session
-        self.sockets = [('cam', self.cam_socket),]
+        self.sockets = {'cam': self.cam_socket, 'trm': self.trm_socket}
+        self.start_socket_order = ('cam', 'trm')
+        self.stop_socket_order = ('trm', 'cam')
 
         # a state variable
         self.state = 'setup'
@@ -94,6 +99,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.set_switch_state('ready')
         horizontal_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self.send)
+        #TODO add an abort button that can close the connections in case one didn't start
 
         # label layout
         label_layout = QtWidgets.QVBoxLayout()
@@ -101,9 +107,9 @@ class GUI_main(QtWidgets.QMainWindow):
         self.cam_response_label = QtWidgets.QLabel('Camera', )
         self.cam_response_label.setStyleSheet("background-color : grey")
         label_layout.addWidget(self.cam_response_label)
-        self.treadmill_response_label = QtWidgets.QLabel('Treadmill', )
-        self.treadmill_response_label.setStyleSheet("background-color : grey")
-        label_layout.addWidget(self.treadmill_response_label)
+        self.trm_response_label = QtWidgets.QLabel('Treadmill', )
+        self.trm_response_label.setStyleSheet("background-color : grey")
+        label_layout.addWidget(self.trm_response_label)
         horizontal_layout.addLayout(label_layout)
 
         self.setMinimumSize(1024, 98)
@@ -147,6 +153,10 @@ class GUI_main(QtWidgets.QMainWindow):
             self.file_handle = '/'.join((self.path, fn))
             print(self.file_handle)
 
+            #open log
+            self.log = logger(self.file_handle + '.log.txt')
+            self.log.w('Connecting sockets.')
+
             #set up camera
             message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
             self.cam_response_label.setStyleSheet("background-color : lightred")
@@ -163,20 +173,34 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.log.w(sname + ' responds ' + response['log'])
                 self.cam_response_label.setStyleSheet("background-color : green")
 
+            #set up treadmill
+            message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+            self.trm_response_label.setStyleSheet("background-color : lightred")
+            self.app.processEvents()
+            self.trm_socket.send_json(message)
+            sname = 'trm'
+            response = json.loads(self.trm_socket.recv_json())
+            if not response['set']:
+                success = False
+                self.trm_response_label.setStyleSheet("background-color : red")
+                print('Treadmill setup failed:', response)
+            else:
+                if 'log' in response:
+                    self.log.w(sname + ' responds ' + response['log'])
+                self.trm_response_label.setStyleSheet("background-color : green")
+
 
             if success:
                 self.set_switch_state('set')
 
         elif self.state == 'set':
-            #start log
-            self.log = logger(self.file_handle+'.log.txt')
             self.log.w('Recording start')
             #start all connections
             success = True
             message = json.dumps({'go': True})
-            for sname, socket in self.sockets:
+            for sname in self.start_socket_order:
+                socket = self.sockets[sname]
                 socket.send_json(message)
-            for sname, socket in self.sockets:
                 response = json.loads(socket.recv_json())
                 if not response['go']:
                     success = False
@@ -193,10 +217,9 @@ class GUI_main(QtWidgets.QMainWindow):
             #stop all connections
             self.log.w('stopping')
             message = json.dumps({'stop': True})
-            for sname, socket in self.sockets:
-                socket.send_json(message)
-            buttons = {'cam': self.cam_response_label}
-            for sname, socket in self.sockets:
+            buttons = {'cam': self.cam_response_label, 'trm': self.trm_response_label}
+            for sname in self.stop_socket_order:
+                socket = self.sockets[sname]
                 response = json.loads(socket.recv_json())
                 if 'log' in response:
                     self.log.w(sname + ' responds ' + response['log'])
