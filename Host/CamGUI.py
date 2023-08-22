@@ -195,7 +195,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.outfile.write(arr)
             #TODO check if there's a way to pass buffer to writer
             self.frame_counter += 1
-            print(self.frame_counter)
+            # print(self.frame_counter)
             if self.frame_counter % self.framerate:
                 self.update_fps()
         if self.format in ('24rgb'):

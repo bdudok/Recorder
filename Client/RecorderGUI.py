@@ -220,6 +220,7 @@ class GUI_main(QtWidgets.QMainWindow):
             buttons = {'cam': self.cam_response_label, 'trm': self.trm_response_label}
             for sname in self.stop_socket_order:
                 socket = self.sockets[sname]
+                socket.send_json(message)
                 response = json.loads(socket.recv_json())
                 if 'log' in response:
                     self.log.w(sname + ' responds ' + response['log'])
@@ -235,7 +236,6 @@ class GUI_main(QtWidgets.QMainWindow):
             self.update_folder()
 
             self.set_switch_state('ready')
-
 
 
     def set_switch_state(self, state):
