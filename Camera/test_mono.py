@@ -6,13 +6,15 @@ from PyQt5.QtGui import QPixmap, QImage
 from Camera import nncam
 import qimage2ndarray
 import cv2
+
+'''this format is 8bit'''
 class App:
     def __init__(self):
         self.hcam = None
         self.buf = None
         self.total = 0
 
-'''this format is 8bit'''
+
 
 # the vast majority of callbacks come from nncam.dll/so/dylib internal threads
     @staticmethod

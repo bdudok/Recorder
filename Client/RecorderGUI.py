@@ -1,11 +1,14 @@
 # GUI
 import sys
 import os
+import time
+
 from pyqtgraph import Qt
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import datetime
 import json
 import zmq
+import win32com.client
 
 
 '''
@@ -32,11 +35,15 @@ class GUI_main(QtWidgets.QMainWindow):
          #treadmill connection
         self.trm_socket = context.socket(zmq.REQ)
         self.trm_socket.connect(f"tcp://localhost:{treadmill_port}")
+         #scope connection
+        self.PrairieLink = win32com.client.Dispatch("PrairieLink64.Application")
 
-        # list of all sockets to start and stop for each session
+        # list of sockets to start and stop for each session
+        #PrairieLink uses a different logic so will be added separately from the sockets.
         self.sockets = {'cam': self.cam_socket, 'trm': self.trm_socket}
-        self.start_socket_order = ('cam', 'trm')
-        self.stop_socket_order = ('trm', 'cam')
+        self.start_socket_order = ('scope', 'cam', 'trm')
+        self.stop_socket_order = ('trm', 'scope', 'cam')
+
 
         # a state variable
         self.state = 'setup'
@@ -99,22 +106,50 @@ class GUI_main(QtWidgets.QMainWindow):
         self.set_switch_state('ready')
         horizontal_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self.send)
-        #TODO add an abort button that can close the connections in case one didn't start
 
         # label layout
+        self.checkboxes = {}
         label_layout = QtWidgets.QVBoxLayout()
         #add a color button for each host
+
+        scope_button_layout = QtWidgets.QHBoxLayout()
+        self.scope_response_label = QtWidgets.QLabel('Scope', )
+        self.scope_response_label.setStyleSheet("background-color : grey")
+        self.scope_checkbox = QtWidgets.QCheckBox()
+        self.scope_checkbox.setChecked(True)
+        self.checkboxes['scope'] = self.scope_checkbox
+        scope_button_layout.addWidget(self.scope_checkbox)
+        scope_button_layout.addWidget(self.scope_response_label)
+        label_layout.addLayout(scope_button_layout)
+
+        cam_button_layout = QtWidgets.QHBoxLayout()
         self.cam_response_label = QtWidgets.QLabel('Camera', )
         self.cam_response_label.setStyleSheet("background-color : grey")
-        label_layout.addWidget(self.cam_response_label)
+        self.cam_checkbox = QtWidgets.QCheckBox()
+        self.cam_checkbox.setChecked(True)
+        self.checkboxes['cam'] = self.cam_checkbox
+        cam_button_layout.addWidget(self.cam_checkbox)
+        cam_button_layout.addWidget(self.cam_response_label)
+        label_layout.addLayout(cam_button_layout)
+
+        trm_button_layout = QtWidgets.QHBoxLayout()
         self.trm_response_label = QtWidgets.QLabel('Treadmill', )
         self.trm_response_label.setStyleSheet("background-color : grey")
-        label_layout.addWidget(self.trm_response_label)
+        self.trm_checkbox = QtWidgets.QCheckBox()
+        self.trm_checkbox.setChecked(True)
+        self.checkboxes['trm'] = self.trm_checkbox
+        trm_button_layout.addWidget(self.trm_checkbox)
+        trm_button_layout.addWidget(self.trm_response_label)
+        label_layout.addLayout(trm_button_layout)
+
+        self.buttons = {'scope': self.scope_response_label, 'cam': self.cam_response_label,
+                        'trm': self.trm_response_label}
         horizontal_layout.addLayout(label_layout)
 
         self.setMinimumSize(1024, 98)
         self.setCentralWidget(centralwidget)
         self.centralWidget().setLayout(horizontal_layout)
+        self.update_folder()
         self.show()
 
     def select_path_callback(self):
@@ -122,7 +157,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
         self.select_path_button.setText(self.wdir)
         self.update_folder()
-
+        #TODO save settings (filername) at rec start and reload on startup
 
     def update_folder(self):
         self.path = '/'.join((self.wdir, self.project_field.text(), ))
@@ -140,14 +175,12 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def send(self):
         # Button will either set up recorders, start them, or stop them, depending on current state
-        #TODO set timeouts for recv
         if self.state == 'setup':
             #check in with each recorder, and exchange settings info
             success = True
 
             #get file handle
-            if self.path is None:
-                self.update_folder()
+            self.update_folder()
             fn = '_'.join((self.animal_field.text(), self.date_field.text(),
                            self.prefix_field.text(), self.counter_field.text()))
             self.file_handle = '/'.join((self.path, fn))
@@ -157,38 +190,52 @@ class GUI_main(QtWidgets.QMainWindow):
             self.log = logger(self.file_handle + '.log.txt')
             self.log.w('Connecting sockets.')
 
+            sname = 'scope'
+            if self.checkboxes[sname].isChecked():
+                if self.PrairieLink.Connect():
+                    self.PrairieLink.SendScriptCommands(f'-SetSavePath "{os.path.dirname(self.file_handle)}"')
+                    self.PrairieLink.SendScriptCommands(f'-SetFileName TSeries "{fn}"')
+                    self.PrairieLink.SendScriptCommands(f'-SetFileIteration TSeries 0')
+                    self.scope_response_label.setStyleSheet("background-color : green")
+                    self.log.w(sname + ' connected.')
+                else:
+                    success = False
+                    self.scope_response_label.setStyleSheet("background-color : red")
+                    print('Scope connection failed',)
+
             #set up camera
-            message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
-            self.cam_response_label.setStyleSheet("background-color : lightred")
-            self.app.processEvents()
-            self.cam_socket.send_json(message)
             sname = 'cam'
-            response = json.loads(self.cam_socket.recv_json())
-            if not response['set']:
-                success = False
-                self.cam_response_label.setStyleSheet("background-color : red")
-                print('Cam setup failed:', response)
-            else:
-                if 'log' in response:
-                    self.log.w(sname + ' responds ' + response['log'])
-                self.cam_response_label.setStyleSheet("background-color : green")
+            if self.checkboxes[sname].isChecked() and success:
+                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+                self.cam_response_label.setStyleSheet("background-color : lightred")
+                self.app.processEvents()
+                self.sockets[sname].send_json(message)
+                response = json.loads(self.sockets[sname].recv_json())
+                if not response['set']:
+                    success = False
+                    self.cam_response_label.setStyleSheet("background-color : red")
+                    print('Cam setup failed:', response)
+                else:
+                    if 'log' in response:
+                        self.log.w(sname + ' responds ' + response['log'])
+                    self.cam_response_label.setStyleSheet("background-color : green")
 
             #set up treadmill
-            message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
-            self.trm_response_label.setStyleSheet("background-color : lightred")
-            self.app.processEvents()
-            self.trm_socket.send_json(message)
             sname = 'trm'
-            response = json.loads(self.trm_socket.recv_json())
-            if not response['set']:
-                success = False
-                self.trm_response_label.setStyleSheet("background-color : red")
-                print('Treadmill setup failed:', response)
-            else:
-                if 'log' in response:
-                    self.log.w(sname + ' responds ' + response['log'])
-                self.trm_response_label.setStyleSheet("background-color : green")
-
+            if self.checkboxes[sname].isChecked() and success:
+                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+                self.trm_response_label.setStyleSheet("background-color : lightred")
+                self.app.processEvents()
+                self.sockets[sname].send_json(message)
+                response = json.loads(self.sockets[sname].recv_json())
+                if not response['set']:
+                    success = False
+                    self.trm_response_label.setStyleSheet("background-color : red")
+                    print('Treadmill setup failed:', response)
+                else:
+                    if 'log' in response:
+                        self.log.w(sname + ' responds ' + response['log'])
+                    self.trm_response_label.setStyleSheet("background-color : green")
 
             if success:
                 self.set_switch_state('set')
@@ -199,37 +246,59 @@ class GUI_main(QtWidgets.QMainWindow):
             success = True
             message = json.dumps({'go': True})
             for sname in self.start_socket_order:
-                socket = self.sockets[sname]
-                socket.send_json(message)
-                response = json.loads(socket.recv_json())
-                if not response['go']:
-                    success = False
-                    print('Failed starting', sname)
-                    self.log.w(sname + ' start failed')
-                else:
-                    self.log.w(sname + ' running')
+                if self.checkboxes[sname].isChecked():
+                    if sname not in ('scope', ):
+                        socket = self.sockets[sname]
+                        socket.send_json(message)
+                        response = json.loads(socket.recv_json())
+                        go = response['go']
+                    elif sname == 'scope':
+                        go = self.PrairieLink.SendScriptCommands('-TSeries')
+                    if go:
+                        self.log.w(sname + ' running')
+                        time.sleep(1) #wait for scope to start, otherwise can miss the start trigger.
+                    else:
+                        success = False
+                        print('Failed starting', sname)
+                        self.log.w(sname + ' start failed')
 
-            if success:
-                self.set_switch_state('go')
             self.log.dump()
+            self.set_switch_state('go')
+            if not success:
+                print('Failed to start, stop everything.')
+                self.send()
+
+            ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
 
         elif self.state == 'recording':
             #stop all connections
             self.log.w('stopping')
             message = json.dumps({'stop': True})
-            buttons = {'cam': self.cam_response_label, 'trm': self.trm_response_label}
             for sname in self.stop_socket_order:
-                socket = self.sockets[sname]
-                socket.send_json(message)
-                response = json.loads(socket.recv_json())
-                if 'log' in response:
-                    self.log.w(sname + ' responds ' + response['log'])
-                    buttons[sname].setStyleSheet("background-color : lightgreen")
-                if not response['stop']:
-                    print('Failed stopping', sname)
-                    self.log.w(sname + ' not responding to stop')
-                    buttons[sname].setStyleSheet("background-color : red")
-                    self.log.dump()
+                stopmsg = None
+                stopSuccess = True
+                if self.checkboxes[sname].isChecked():
+                    if sname not in ('scope',):
+                        socket = self.sockets[sname]
+                        socket.send_json(message)
+                        response = json.loads(socket.recv_json())
+                        if 'log' in response:
+                            stopmsg = response['log']
+                        if not response['stop']:
+                            print('Failed stopping', sname)
+                            stopSuccess = False
+                    elif sname == 'scope':
+                        stopmsg = self.PrairieLink.SendScriptCommands('-Abort')
+                        self.PrairieLink.Disconnect()
+                        if stopmsg:
+                            stopSuccess = True
+                    if stopSuccess:
+                        self.log.w(sname + ' responds ' + str(stopmsg))
+                        self.buttons[sname].setStyleSheet("background-color : lightgreen")
+                    else:
+                        self.log.w(sname + ' not responding to stop')
+                        self.log.dump()
+
             self.log.w('end of log')
             self.log.cl()
             #increment counter
