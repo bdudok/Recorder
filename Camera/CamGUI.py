@@ -106,7 +106,7 @@ class GUI_main(QtWidgets.QMainWindow):
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
 
-    def open_cam(self):
+    def open_cam(self, maxspeed=False):
         self.cam = nncam.Nncam.Open(self.camID)
         if self.format == '24rgb':
             self.bits = 24
@@ -114,7 +114,10 @@ class GUI_main(QtWidgets.QMainWindow):
             self.bits = 8
             self.cam.put_Option(nncam.NNCAM_OPTION_RAW, 1)
         # print(a[i].id, 'connected')
-        self.cam.put_Speed(self.camspeed)
+        if maxspeed:
+            self.cam.put_Speed(self.cam.MaxSpeed())
+        else:
+            self.cam.put_Speed(self.camspeed)
         self.sz = self.cam.get_Size()  # width, height
         self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
         self.buf = bytes(self.bufsize)
@@ -261,7 +264,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # print('start triggered called')
         if self.cam:
             self.stop_cam()
-        self.open_cam()
+        self.open_cam(maxspeed=True)
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)

@@ -42,7 +42,7 @@ class GUI_main(QtWidgets.QMainWindow):
         #PrairieLink uses a different logic so will be added separately from the sockets.
         self.sockets = {'cam': self.cam_socket, 'trm': self.trm_socket}
         self.start_socket_order = ('scope', 'cam', 'trm')
-        self.stop_socket_order = ('trm', 'scope', 'cam')
+        self.stop_socket_order = ('scope', 'trm', 'cam') #removed session start TTL
 
 
         # a state variable
@@ -254,9 +254,9 @@ class GUI_main(QtWidgets.QMainWindow):
                         go = response['go']
                     elif sname == 'scope':
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
+                        time.sleep(1) #wait for scope to start, otherwise can miss the start trigger.
                     if go:
                         self.log.w(sname + ' running')
-                        time.sleep(1) #wait for scope to start, otherwise can miss the start trigger.
                     else:
                         success = False
                         print('Failed starting', sname)
