@@ -1,7 +1,7 @@
 from multiprocessing import Process, freeze_support, set_start_method
 
-from Client.RecorderGUI import launch_GUI as launch_recorder
-from Host.CamGUI import launch_GUI as launch_camera
+from Recorder.RecorderGUI import launch_GUI as launch_recorder
+from Camera.CamGUI import launch_GUI as launch_camera
 
 cam_port = 5555
 trm_port = 5554
