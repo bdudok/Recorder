@@ -31,9 +31,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
         self.format = '24rgb' # 24rgb works, working on implementing 8grey, future:16rgb (for zero padded 12 raw data)
         assert self.format in ('24rgb', '8grey')
-        #option 1: we can have a Qt timer run on a set interval (below actual frame rate), and always save the current buffer
-        #option 2: we can set the frame rate close to the desired rate, and save every frame. try 2 for now at 30 fps.
-        #option 3: we can run a trigger and save every triggered frame, but if the trigger times are not explicitly saved, it may not help.
+        self.fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        self.file_ext = '.avi'
 
         # this process will act as zmq server, and listen to the port for settings and commands to start/stop acquisition
         context = zmq.Context()
@@ -42,32 +41,12 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #open camera
         a = nncam.Nncam.EnumV2()
-        self.cam = nncam.Nncam.Open(a[0].id)
-        if self.format == '24rgb':
-            self.bits = 24
-        elif self.format == '8grey':
-            self.bits = 8
-            self.cam.put_Option(nncam.NNCAM_OPTION_RAW, 1)
-        self.fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-        self.file_ext = '.avi'
-        # print(a[i].id, 'connected')
-        self.cam.put_Speed(self.camspeed)
-        self.sz = self.cam.get_Size()  # width, height
-        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
-        self.buf = bytes(self.bufsize)
-        self.set_exptime()
-        self.cam.put_AutoExpoEnable(0)
-        self.cam.put_VFlip(1)
-        self.pDate = None
+        self.cam = False
+        self.camID = a[0].id
 
         #set up output
-        # self.timer = QTimer(self)
-        # self.timer.timeout.connect(self.onTimer)
         self.is_writing = False
         self.outfile = None
-
-
-
 
         #central widget
         self.setMinimumSize(1024, 768)
@@ -94,17 +73,20 @@ class GUI_main(QtWidgets.QMainWindow):
         # button to 'Arm' for recording
         self.arm_toggle = QtWidgets.QPushButton()
         self.arm_toggle.setCheckable(True)
-        self.set_switch_state('arm')
         horizontal_layout.addWidget(self.arm_toggle)
         self.arm_toggle.clicked.connect(self.arm)
 
-        # self.test_button = QtWidgets.QPushButton()
-        # self.test_button.setText('Pull')
-        # horizontal_layout.addWidget(self.test_button)
-        # self.test_button.clicked.connect(self.pullImage)
+        #button to start/stop live
+        self.live_toggle = QtWidgets.QPushButton()
+        self.live_toggle.setCheckable(True)
+        horizontal_layout.addWidget(self.live_toggle)
+        self.live_toggle.setText('Live')
+        self.live_toggle.setChecked(True)
+        self.live_toggle.setStyleSheet("background-color : green")
+        self.live_toggle.clicked.connect(self.live)
 
         # label to display prefix
-        self.filename_label = QtWidgets.QLabel('Waiting for recorder', )
+        self.filename_label = QtWidgets.QLabel('Set exposure then arm.', )
         horizontal_layout.addWidget(self.filename_label)
 
         #image
@@ -116,13 +98,29 @@ class GUI_main(QtWidgets.QMainWindow):
         grid_layout.addWidget(self.lbl_video, 1, 0, 8, 10)
         self.centralWidget().setLayout(grid_layout)
 
-        #start live view
-        self.cam.StartPullModeWithCallback(self.cameraCallback, self)
-        # self.timer.start(int(1000/self.framerate))
+        #start live vieo
+        self.set_switch_state('arm')
+        self.start_cam_live()
         self.show()
 
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
+
+    def open_cam(self):
+        self.cam = nncam.Nncam.Open(self.camID)
+        if self.format == '24rgb':
+            self.bits = 24
+        elif self.format == '8grey':
+            self.bits = 8
+            self.cam.put_Option(nncam.NNCAM_OPTION_RAW, 1)
+        # print(a[i].id, 'connected')
+        self.cam.put_Speed(self.camspeed)
+        self.sz = self.cam.get_Size()  # width, height
+        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
+        self.buf = bytes(self.bufsize)
+        self.set_exptime()
+        self.cam.put_AutoExpoEnable(0)
+        self.cam.put_VFlip(1)
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
@@ -146,15 +144,23 @@ class GUI_main(QtWidgets.QMainWindow):
         # after 'arming', exposure is fixed, listening to requests from client
         # when acquisition running, all controls are disabled
         if state == 'armed':
+            self.start_cam_live()
+            self.live_toggle.setCheckable(False)
             self.arm_toggle.setStyleSheet("background-color : green")
+            self.filename_label.setText('Waiting for recorder', )
             self.arm_toggle.setText('Armed')
         elif state == 'arm':
             if self.is_writing:
                 self.is_writing = False
+                self.stop_cam()
+                self.start_cam_live()
                 QTimer.singleShot(2000, self.release_outfile)
             self.arm_toggle.setStyleSheet("background-color : red")
             self.arm_toggle.setText('Arm')
+            self.live_toggle.setCheckable(True)
         elif state == 'running':
+            self.start_cam_triggered()
+            self.lbl_frame.setText('Waiting for hardware trigger.')
             self.arm_toggle.setStyleSheet("background-color : blue")
             self.arm_toggle.setText('Acquiring')
             self.is_writing = True
@@ -181,8 +187,9 @@ class GUI_main(QtWidgets.QMainWindow):
     def update_fps(self):
         if self.cam:
             nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
-            fps = nFrame * 1000.0 / nTime
-            self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
+            if nTime:
+                fps = nFrame * 1000.0 / nTime
+                self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
             if self.is_writing:
                 self.fpsvals.append(fps)
 
@@ -215,6 +222,8 @@ class GUI_main(QtWidgets.QMainWindow):
         if self.armed:
             self.set_switch_state('armed')
             self.exposure_setting.setEnabled(False)
+            self.live_toggle.setCheckable(False)
+            self.live_toggle.setStyleSheet("background-color : grey")
             #will poll request queue periodically
             self.timer = QtCore.QTimer()
             self.timer.setInterval(self.pollinterval)
@@ -225,7 +234,43 @@ class GUI_main(QtWidgets.QMainWindow):
             self.arm_toggle.setStyleSheet("background-color : red")
             self.arm_toggle.setText('Arm')
             self.exposure_setting.setEnabled(True)
+            self.live_toggle.setCheckable(True)
             self.timer.stop()
+
+    def live(self):
+        #the two states of the button. live: cam running with software trigger and displaying. otherwise, cam stopped.
+        #recording will start the cam in external trigger mode, so cam is either in live or in arm.
+        if not self.is_writing:
+            if self.live_toggle.isChecked():
+                self.start_cam_live()
+                self.live_toggle.setStyleSheet("background-color : green")
+            else:
+                self.stop_cam()
+                self.filename_label.setText('Camera closed.')
+                self.live_toggle.setStyleSheet("background-color : grey")
+
+    def start_cam_live(self):
+        # print('start called')
+        if not self.cam:
+            self.open_cam()
+            self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 0)
+            self.cam.StartPullModeWithCallback(self.cameraCallback, self)
+            self.live_toggle.setStyleSheet("background-color : green")
+
+    def start_cam_triggered(self):
+        # print('start triggered called')
+        if self.cam:
+            self.stop_cam()
+        self.open_cam()
+        self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
+        self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
+        self.cam.StartPullModeWithCallback(self.cameraCallback, self)
+
+
+    def stop_cam(self):
+        # print('stop called')
+        if self.cam:
+            self.cam.Close()
 
     def listen(self):
         # poll the request queue, and respond if anything.
@@ -238,7 +283,6 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.set_handle(request['handle'])
                 logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}'
                 message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
-                #TODO this entry is not in the output
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)
             elif 'go' in request:
@@ -250,7 +294,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.set_switch_state('arm')
                 self.arm_toggle.setEnabled(True)
                 self.arm_toggle.setChecked(True)
-                self.arm() #TODO this dos not work, not rearmed after acq
+                self.arm()
                 logstring = f'{self.frame_counter} frames captured, {numpy.mean(self.fpsvals):.2f} fps'
                 message = {'stop': True, 'log': logstring}
                 self.fpsvals = []
