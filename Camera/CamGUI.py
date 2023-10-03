@@ -193,8 +193,8 @@ class GUI_main(QtWidgets.QMainWindow):
             if nTime:
                 fps = nFrame * 1000.0 / nTime
                 self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
-            if self.is_writing:
-                self.fpsvals.append(fps)
+                if self.is_writing:
+                    self.fpsvals.append(fps)
 
     def preview_update(self):
         if self.is_writing:
@@ -212,9 +212,10 @@ class GUI_main(QtWidgets.QMainWindow):
             image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
         elif self.format in ('8grey'):
             image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_Grayscale8).mirrored(False, True)
-        newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
-                                Qt.FastTransformation)
-        self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
+        if (not self.is_writing) or self.frame_counter % 2: #skip when writing to save performance
+            newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
+                                    Qt.FastTransformation)
+            self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
         # self.onTimer()
         # print('Frame grabbed')
 
