@@ -9,6 +9,7 @@ import datetime
 import json
 import zmq
 import win32com.client
+import pyperclip
 
 
 '''
@@ -50,6 +51,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #central widget
         centralwidget = QtWidgets.QWidget(self)
+        main_vert_layout = QtWidgets.QVBoxLayout()
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
@@ -99,13 +101,24 @@ class GUI_main(QtWidgets.QMainWindow):
         self.counter_field = QtWidgets.QLineEdit(self)
         self.counter_field.setText('000')
         c_layout.addWidget(self.counter_field)
+        #filename
+        self.fname_label = QtWidgets.QLineEdit(self)
+        self.fname_label.setText(self.prefix)
         horizontal_layout.addLayout(c_layout)
 
         # button
+        btn_layout = QtWidgets.QVBoxLayout()
+        self.check_button = QtWidgets.QPushButton('Check name', )
+        self.check_button.clicked.connect(self.update_fname)
+
+        self.copy_button = QtWidgets.QPushButton('Copy name', )
+        self.copy_button.clicked.connect(self.copy_fname)
+
         self.send_button = QtWidgets.QPushButton('Record', )
         self.set_switch_state('ready')
-        horizontal_layout.addWidget(self.send_button)
+        btn_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self.send)
+        horizontal_layout.addLayout(btn_layout)
 
         # label layout
         self.checkboxes = {}
@@ -148,7 +161,13 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.setMinimumSize(1024, 98)
         self.setCentralWidget(centralwidget)
-        self.centralWidget().setLayout(horizontal_layout)
+        bottom_row_layout = QtWidgets.QHBoxLayout()
+        bottom_row_layout.addWidget(self.check_button)
+        bottom_row_layout.addWidget(self.copy_button)
+        bottom_row_layout.addWidget(self.fname_label)
+        main_vert_layout.addLayout(horizontal_layout)
+        main_vert_layout.addLayout(bottom_row_layout)
+        self.centralWidget().setLayout(main_vert_layout)
         self.update_folder()
         self.show()
 
@@ -157,7 +176,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
         self.select_path_button.setText(self.wdir)
         self.update_folder()
-        #TODO save settings (filername) at rec start and reload on startup
+        #TODO save settings (filename) at rec start and reload on startup
 
     def update_folder(self):
         self.path = '/'.join((self.wdir, self.project_field.text(), ))
@@ -166,12 +185,24 @@ class GUI_main(QtWidgets.QMainWindow):
             print('Creating folder:', self.path)
             self.counter_field.setText('000')
         else:
-            flist = [fn for fn in os.listdir(self.path) if '.log.' in fn]
-            counters = [fn.split('.')[0].split('_')[-1] for fn in flist]
+            flist = [fn for fn in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, fn))]
+            counters = [fn.split('_')[-1].split('-')[0] for fn in flist]
             c = len(flist)
             while f'{c:03}' in counters:
                 c += 1
             self.counter_field.setText(f'{c:03}')
+
+    def update_fname(self):
+        self.update_folder()
+        fn = '_'.join((self.animal_field.text(), self.date_field.text(),
+                       self.prefix_field.text(), self.counter_field.text()))
+        self.prefix = fn
+        self.fname_label.setText(self.prefix)
+        self.file_handle = '/'.join((self.path, self.prefix))
+        print(self.file_handle)
+
+    def copy_fname(self):
+        pyperclip.copy(self.prefix + '-000')
 
     def send(self):
         # Button will either set up recorders, start them, or stop them, depending on current state
@@ -180,11 +211,9 @@ class GUI_main(QtWidgets.QMainWindow):
             success = True
 
             #get file handle
-            self.update_folder()
-            fn = '_'.join((self.animal_field.text(), self.date_field.text(),
-                           self.prefix_field.text(), self.counter_field.text()))
-            self.file_handle = '/'.join((self.path, fn))
-            print(self.file_handle)
+            self.update_fname()
+            op_dir = self.file_handle+'-000'
+            self.file_handle_subdir = os.path.join(op_dir, self.prefix)
 
             #open log
             self.log = logger(self.file_handle + '.log.txt')
@@ -194,7 +223,7 @@ class GUI_main(QtWidgets.QMainWindow):
             if self.checkboxes[sname].isChecked():
                 if self.PrairieLink.Connect():
                     self.PrairieLink.SendScriptCommands(f'-SetSavePath "{os.path.dirname(self.file_handle)}"')
-                    self.PrairieLink.SendScriptCommands(f'-SetFileName TSeries "{fn}"')
+                    self.PrairieLink.SendScriptCommands(f'-SetFileName TSeries "{self.prefix}"')
                     self.PrairieLink.SendScriptCommands(f'-SetFileIteration TSeries 0')
                     self.scope_response_label.setStyleSheet("background-color : green")
                     self.log.w(sname + ' connected.')
@@ -206,7 +235,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #set up camera
             sname = 'cam'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle_subdir})
                 self.cam_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
                 self.sockets[sname].send_json(message)
@@ -223,7 +252,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #set up treadmill
             sname = 'trm'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle})
+                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle_subdir})
                 self.trm_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
                 self.sockets[sname].send_json(message)
@@ -303,6 +332,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.log.cl()
             #increment counter
             self.update_folder()
+            self.update_fname()
 
             self.set_switch_state('ready')
 
