@@ -133,14 +133,15 @@ class GUI_main(QtWidgets.QMainWindow):
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
 
-    def set_handle(self, handle):
-        self.outfile_handle = handle+self.file_ext
+    def set_handle(self):
+        # self.outfile_handle = handle+self.file_ext
         is_color = self.format in ('24rgb',)
         shape = (self.sz[0], self.sz[1])
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, shape, is_color)
 
-        print('Saving file:', handle)
+        print('Saving file:', self.outfile_handle)
         self.frame_counter = 0
+        self.has_writer = True
 
     def set_switch_state(self, state):
         # we will have a base state when exposure can be modified, stream not saved
@@ -202,6 +203,8 @@ class GUI_main(QtWidgets.QMainWindow):
                 arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
             elif self.format in ('8grey'):
                 arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0]))
+            if not self.has_writer:
+                self.set_handle()
             self.outfile.write(arr)
             #TODO check if there's a way to pass buffer to writer
             self.frame_counter += 1
@@ -284,7 +287,9 @@ class GUI_main(QtWidgets.QMainWindow):
             print(request)
             if 'set' in request:
                 self.set_prefix(request['prefix'])
-                self.set_handle(request['handle'])
+                self.frame_counter = 0
+                self.outfile_handle = request['handle'] + self.file_ext
+                self.has_writer= False
                 logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}'
                 message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
                 self.server.send_json(json.dumps(message))

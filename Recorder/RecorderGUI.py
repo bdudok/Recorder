@@ -213,10 +213,13 @@ class GUI_main(QtWidgets.QMainWindow):
             #get file handle
             self.update_fname()
             op_dir = self.file_handle+'-000'
+            # if not os.path.exists(op_dir):
+            #     os.mkdir(op_dir)
             self.file_handle_subdir = os.path.join(op_dir, self.prefix)
 
             #open log
-            self.log = logger(self.file_handle + '.log.txt')
+            self.log = logger(self.file_handle_subdir + '.log.txt')
+            print(self.file_handle_subdir + '.log.txt')
             self.log.w('Connecting sockets.')
 
             sname = 'scope'
@@ -235,7 +238,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #set up camera
             sname = 'cam'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle_subdir})
+                message = json.dumps({'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir})
                 self.cam_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
                 self.sockets[sname].send_json(message)
@@ -252,7 +255,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #set up treadmill
             sname = 'trm'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': fn, 'handle': self.file_handle_subdir})
+                message = json.dumps({'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir})
                 self.trm_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
                 self.sockets[sname].send_json(message)
@@ -352,11 +355,10 @@ class GUI_main(QtWidgets.QMainWindow):
             self.state = 'recording'
 
 class logger:
-    def __init__(self, handle):
-        if handle is None:
-            self.f = None
-        else:
-            self.f = open(handle, 'a')
+    def __init__(self, handle, defer_until='scope running'):
+        self.defer_until = defer_until #create file only after image folder exists
+        self.handle=handle
+        self.f = None
         self.s = ''
 
     def w(self, message):
@@ -365,11 +367,15 @@ class logger:
         print(ts, message)
 
     def dump(self):
+        if self.defer_until is not None:
+            if self.defer_until in self.s:
+                self.f = open(self.handle, 'a')
+                self.defer_until = None
         if self.f is not None:
             self.f.write(self.s)
             self.f.flush()
             os.fsync(self.f.fileno())
-        self.s = ''
+            self.s = ''
 
     def cl(self):
         if self.f is not None:
