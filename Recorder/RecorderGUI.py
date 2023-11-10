@@ -27,6 +27,14 @@ class GUI_main(QtWidgets.QMainWindow):
         self.wdir = 'E:/_Recorder'
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
+        self.saved_fields = ('project_field', 'animal_field', 'prefix_field')
+        self.settings_name = self.wdir + '_recorder_fields.json'
+        if os.path.exists(self.settings_name):
+            with open(self.settings_name) as f:
+                self.settings_dict = json.load(f)
+            print(self.settings_dict)
+        else:
+            self.settings_dict = {}
 
         #set up connections to each server
         context = zmq.Context()
@@ -94,6 +102,11 @@ class GUI_main(QtWidgets.QMainWindow):
         self.prefix_field.setText('movie')
         pf_layout.addWidget(self.prefix_field)
         horizontal_layout.addLayout(pf_layout)
+
+        #update fields from file
+        for fieldname in self.saved_fields:
+            if fieldname in self.settings_dict:
+                getattr(self, fieldname).setText(self.settings_dict[fieldname])
 
         #counter
         c_layout = QtWidgets.QVBoxLayout()
@@ -299,6 +312,11 @@ class GUI_main(QtWidgets.QMainWindow):
             if not success:
                 print('Failed to start, stop everything.')
                 self.send()
+            else:
+                for fieldname in self.saved_fields:
+                    self.settings_dict[fieldname] = getattr(self, fieldname).text()
+                with open(self.settings_name, 'w') as f:
+                    json.dump(self.settings_dict, f)
 
             ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
 
