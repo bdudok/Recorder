@@ -189,7 +189,6 @@ class GUI_main(QtWidgets.QMainWindow):
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
         self.select_path_button.setText(self.wdir)
         self.update_folder()
-        #TODO save settings (filename) at rec start and reload on startup
 
     def update_folder(self):
         self.path = '/'.join((self.wdir, self.project_field.text(), ))
