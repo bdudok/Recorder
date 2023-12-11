@@ -50,7 +50,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # list of sockets to start and stop for each session
         #PrairieLink uses a different logic so will be added separately from the sockets.
         self.sockets = {'cam': self.cam_socket, 'trm': self.trm_socket}
-        self.start_socket_order = ('scope', 'cam', 'trm')
+        self.start_socket_order = ('cam', 'scope', 'trm', ) #unfortunately scope has to start first with empty folder
         self.stop_socket_order = ('scope', 'trm', 'cam') #removed session start TTL
 
 
@@ -289,6 +289,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #start all connections
             success = True
             message = json.dumps({'go': True})
+            self.send_button.setText('Starting...')
             for sname in self.start_socket_order:
                 if self.checkboxes[sname].isChecked():
                     if sname not in ('scope', ):
@@ -297,8 +298,8 @@ class GUI_main(QtWidgets.QMainWindow):
                         response = json.loads(socket.recv_json())
                         go = response['go']
                     elif sname == 'scope':
+                        # time.sleep(5)  # witait for everything else to start.
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
-                        time.sleep(1) #wait for scope to start, otherwise can miss the start trigger.
                     if go:
                         self.log.w(sname + ' running')
                     else:
