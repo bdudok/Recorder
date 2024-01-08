@@ -32,7 +32,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.fpsvals = []
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
         self.ipi = 5 #(mean interval of rsync signals in sec)
-        self.reclen = 60*60 #file lengthi, in seconds
+        self.reclen = 1*60 #file length, in seconds
         self.nsync = 0
         self.synctimes = numpy.empty((int(2*60*60/self.ipi), 4), dtype=numpy.int32)
 
@@ -51,7 +51,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.pDate = None
 
         #set trigger out
-        print(f'IO mode: {self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_GET_SUPPORTEDMODE, 0x02)}')  # 0x01 = Output}')
+        # print(f'IO mode: {self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_GET_SUPPORTEDMODE, 0x02)}')  # 0x01 = Output}')
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
         self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
         # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01)  # gpio0 = 0x01
@@ -115,7 +115,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.filename_label = QtWidgets.QLineEdit(self)
         self.filename_label.setText('Set file name')
-        self.filename_label.editingFinished.connect(self.set_handle)
+        # self.filename_label.editingFinished.connect(self.set_handle)
         horizontal_layout.addWidget(self.filename_label)
 
 
@@ -150,7 +150,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def filedialog(self):
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
-        self.set_handle()
+        # self.set_handle()
 
     def set_handle(self):
         timestamp = datetime.datetime.now().isoformat(timespec='seconds').replace(':', '-')
@@ -158,6 +158,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', self.outfile_handle)
         self.frame_counter = 0
+        self.nsync = 0
 
     def set_switch_state(self, state):
         # we will have a base state when exposure can be modified, stream not saved
@@ -169,7 +170,6 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.is_writing = False
                 self.release_outfile()
                 numpy.save(self.outfile_handle.replace(self.file_ext, '.npy'), self.synctimes[:self.nsync])
-                self.set_handle()
             self.rec_toggle.setStyleSheet("background-color : red")
             self.rec_toggle.setText('Rec')
             self.exposure_setting.setEnabled(True)
@@ -177,9 +177,18 @@ class GUI_main(QtWidgets.QMainWindow):
             self.rec_toggle.setStyleSheet("background-color : blue")
             self.rec_toggle.setText('Acquiring')
             self.exposure_setting.setEnabled(False)
+            self.set_handle()
             self.is_writing = True
             self.acq_start_time = datetime.datetime.now()
             QTimer.singleShot(100, self.sync_pulse)
+        elif state == 'restart':
+            if self.is_writing:
+                self.is_writing = False
+                self.release_outfile()
+                numpy.save(self.outfile_handle.replace(self.file_ext, '.npy'), self.synctimes[:self.nsync])
+                self.set_switch_state('running')
+
+
 
     def rec(self, toggle=False):
         if not self.rec_toggle.isChecked():
@@ -194,7 +203,7 @@ class GUI_main(QtWidgets.QMainWindow):
     def sync_pulse(self):
         if self.is_writing:
             rsync = self.nsync, *self.cam.get_FrameRate()
-            print(self.outfile_handle, rsync)
+            print(self.outfile_handle, f'TTL {rsync[0]}, Frame {rsync[-1]}')
             self.synctimes[self.nsync] = rsync
             self.nsync += 1
             #flip GPIO hold
@@ -232,7 +241,7 @@ class GUI_main(QtWidgets.QMainWindow):
         if self.cam:
             #restart acq if over time limit
             time_running = datetime.datetime.now() - self.acq_start_time
-            print('timedelte:', time_running)
+            # print('timedelte:', time_running)
             if time_running > datetime.timedelta(seconds=self.reclen):
                 self.restart_acq()
             else:
@@ -258,8 +267,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # print('Frame grabbed')
 
     def restart_acq(self):
-        self.rec_toggle.clicked.emit()
-        QTimer.singleShot(1000, self.rec_toggle.clicked.emit)
+        self.set_switch_state('restart')
 
 def launch_GUI(*args, **kwargs):
     app = QtWidgets.QApplication(sys.argv)
