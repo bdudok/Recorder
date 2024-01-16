@@ -32,9 +32,10 @@ class GUI_main(QtWidgets.QMainWindow):
         self.fpsvals = []
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
         self.ipi = 5 #(mean interval of rsync signals in sec)
-        self.reclen = 1*60 #file length, in seconds
+        self.reclen = 60*60 #file length, in seconds
         self.nsync = 0
-        self.synctimes = numpy.empty((int(2*60*60/self.ipi), 4), dtype=numpy.int32)
+        self.synctimes = numpy.empty((int(2*60*60/self.ipi), 5), dtype=numpy.int32)
+        self.frame_counter = 0
 
         #open camera
         a = nncam.Nncam.EnumV2()
@@ -157,7 +158,6 @@ class GUI_main(QtWidgets.QMainWindow):
         self.outfile_handle = os.path.join(self.wdir, self.filename_label.text()+'-'+timestamp+self.file_ext)
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', self.outfile_handle)
-        self.frame_counter = 0
         self.nsync = 0
 
     def set_switch_state(self, state):
@@ -202,7 +202,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def sync_pulse(self):
         if self.is_writing:
-            rsync = self.nsync, *self.cam.get_FrameRate()
+            rsync = self.nsync, *self.cam.get_FrameRate(), self.frame_counter
             print(self.outfile_handle, f'TTL {rsync[0]}, Frame {rsync[-1]}')
             self.synctimes[self.nsync] = rsync
             self.nsync += 1
