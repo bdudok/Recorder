@@ -209,7 +209,7 @@ class GUI_main(QtWidgets.QMainWindow):
             #TODO check if there's a way to pass buffer to writer
             self.frame_counter += 1
             # print(self.frame_counter)
-            if self.frame_counter % self.framerate:
+            if not self.frame_counter % self.framerate:
                 self.update_fps()
         if self.format in ('24rgb'):
             image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
