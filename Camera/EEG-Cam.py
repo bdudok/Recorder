@@ -7,6 +7,7 @@ from PyQt5.QtGui import QPixmap, QImage
 from Camera import nncam
 import cv2
 import os
+import datetime
 
 
 import json
@@ -24,15 +25,17 @@ class GUI_main(QtWidgets.QMainWindow):
         self.app = app
 
         #set variables
+        self.wdir = 'C:\EEG/vid/'
         self.exposure_time = 4
         self.vidres = (1440, 1080)
         self.framerate = 30
         self.fpsvals = []
         self.camspeed = 1 # 0:15 fps ; 1:30 fps; 2:45;3:60... etc, does not depend on exposure. Not exact.
         self.ipi = 5 #(mean interval of rsync signals in sec)
-        self.reclen = 60*60 #file lengthi, in seconds
+        self.reclen = 60*60 #file length, in seconds
         self.nsync = 0
-        self.synctimes = numpy.empty((int(2*60*60/self.ipi), 4))
+        self.synctimes = numpy.empty((int(2*60*60/self.ipi), 5), dtype=numpy.int32)
+        self.frame_counter = 0
 
         #open camera
         a = nncam.Nncam.EnumV2()
@@ -47,6 +50,20 @@ class GUI_main(QtWidgets.QMainWindow):
         self.cam.put_AutoExpoEnable(0)
         self.cam.put_VFlip(1)
         self.pDate = None
+
+        #set trigger out
+        # print(f'IO mode: {self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_GET_SUPPORTEDMODE, 0x02)}')  # 0x01 = Output}')
+        self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
+        self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
+        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01)  # gpio0 = 0x01
+        #gpio0 is line 2
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # 0x01 = Output
+        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_FORMAT, 0x02)  # 0x02 = TTL
+        self.op_state = True
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
+
+        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTMODE, 0x01)  # 0x03 = User output
+
 
         #set up output
         # self.timer = QTimer(self)
@@ -99,7 +116,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.filename_label = QtWidgets.QLineEdit(self)
         self.filename_label.setText('Set file name')
-        self.filename_label.editingFinished.connect(self.set_handle)
+        # self.filename_label.editingFinished.connect(self.set_handle)
         horizontal_layout.addWidget(self.filename_label)
 
 
@@ -115,6 +132,10 @@ class GUI_main(QtWidgets.QMainWindow):
         #start live view
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
         # self.timer.start(int(1000/self.framerate))
+
+        # start software trigger
+        self.cam.Trigger(0xFFFF) #0xFFFF: continous trigger mode
+
         self.show()
 
     def set_exptime(self, ms=8):
@@ -129,14 +150,15 @@ class GUI_main(QtWidgets.QMainWindow):
     #     self.filename_label.setText(prefix)
 
     def filedialog(self):
-        self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
-        self.set_handle()
+        self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
+        # self.set_handle()
 
     def set_handle(self):
-        self.outfile_handle = os.path.join(self.wdir + self.filename_label.text()+self.file_ext)
+        timestamp = datetime.datetime.now().isoformat(timespec='seconds').replace(':', '-')
+        self.outfile_handle = os.path.join(self.wdir, self.filename_label.text()+'-'+timestamp+self.file_ext)
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', self.outfile_handle)
-        self.frame_counter = 0
+        self.nsync = 0
 
     def set_switch_state(self, state):
         # we will have a base state when exposure can be modified, stream not saved
@@ -144,9 +166,10 @@ class GUI_main(QtWidgets.QMainWindow):
         # when acquisition running, all controls are disabled
         if state == 'arm':
             if self.is_writing:
+                #end of acq
                 self.is_writing = False
-                QTimer.singleShot(100, self.release_outfile)
-                #todo save rsync array; restart every hour; send ttl out
+                self.release_outfile()
+                numpy.save(self.outfile_handle.replace(self.file_ext, '.npy'), self.synctimes[:self.nsync])
             self.rec_toggle.setStyleSheet("background-color : red")
             self.rec_toggle.setText('Rec')
             self.exposure_setting.setEnabled(True)
@@ -154,10 +177,20 @@ class GUI_main(QtWidgets.QMainWindow):
             self.rec_toggle.setStyleSheet("background-color : blue")
             self.rec_toggle.setText('Acquiring')
             self.exposure_setting.setEnabled(False)
+            self.set_handle()
             self.is_writing = True
+            self.acq_start_time = datetime.datetime.now()
             QTimer.singleShot(100, self.sync_pulse)
+        elif state == 'restart':
+            if self.is_writing:
+                self.is_writing = False
+                self.release_outfile()
+                numpy.save(self.outfile_handle.replace(self.file_ext, '.npy'), self.synctimes[:self.nsync])
+                self.set_switch_state('running')
 
-    def rec(self):
+
+
+    def rec(self, toggle=False):
         if not self.rec_toggle.isChecked():
             self.set_switch_state('arm')
         else:
@@ -169,11 +202,25 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def sync_pulse(self):
         if self.is_writing:
-            rsync = self.nsync, *self.cam.get_FrameRate()
-            print(rsync)
+            rsync = self.nsync, *self.cam.get_FrameRate(), self.frame_counter
+            print(self.outfile_handle, f'TTL {rsync[0]}, Frame {rsync[-1]}')
             self.synctimes[self.nsync] = rsync
             self.nsync += 1
+            #flip GPIO hold
+            self.flip_on()
+            QTimer.singleShot(10, self.flip_off)
+
+            #re-trigger cam to get a ttl out
+            # self.cam.Trigger(0xFFFF)  # 0xFFFF: continous trigger mode
             QTimer.singleShot(int(1000 * numpy.random.random()*1.8*self.ipi+0.1*self.ipi), self.sync_pulse)
+
+    def flip_off(self):
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
+
+    def flip_on(self):
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, not self.op_state)
+
+
     @staticmethod
     def cameraCallback(nEvent, ctx):
         if nEvent == nncam.NNCAM_EVENT_IMAGE:
@@ -192,11 +239,17 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def update_fps(self):
         if self.cam:
-            nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
-            fps = nFrame * 1000.0 / nTime
-            self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
-            if self.is_writing:
-                self.fpsvals.append(fps)
+            #restart acq if over time limit
+            time_running = datetime.datetime.now() - self.acq_start_time
+            # print('timedelte:', time_running)
+            if time_running > datetime.timedelta(seconds=self.reclen):
+                self.restart_acq()
+            else:
+                nFrame, nTime, nTotalFrame = self.cam.get_FrameRate()
+                fps = nFrame * 1000.0 / nTime
+                self.lbl_frame.setText("{}, fps = {:.1f}".format(self.frame_counter, fps))
+                if self.is_writing:
+                    self.fpsvals.append(fps)
 
     def preview_update(self):
         if self.is_writing:
@@ -204,7 +257,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.outfile.write(arr)
             self.frame_counter += 1
             # print(self.frame_counter)
-            if self.frame_counter % self.framerate:
+            if not self.frame_counter % self.framerate:
                 self.update_fps()
         image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888).convertToFormat(QImage.Format_Grayscale8)#.mirrored(False, True)
         newimage = image.scaled(self.lbl_video.width(), self.lbl_video.height(), Qt.KeepAspectRatio,
@@ -212,6 +265,9 @@ class GUI_main(QtWidgets.QMainWindow):
         self.lbl_video.setPixmap(QPixmap.fromImage(newimage))
         # self.onTimer()
         # print('Frame grabbed')
+
+    def restart_acq(self):
+        self.set_switch_state('restart')
 
 def launch_GUI(*args, **kwargs):
     app = QtWidgets.QApplication(sys.argv)
