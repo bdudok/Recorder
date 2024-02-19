@@ -24,6 +24,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #set variables
         self.exposure_time = 4
+        self.delay_time = 35
         self.pollinterval = 1000
         self.vidres = (1440, 1080)
         self.framerate = 30
@@ -67,6 +68,18 @@ class GUI_main(QtWidgets.QMainWindow):
         self.exposure_setting.valueChanged.connect(self.exposure_update)
         horizontal_layout.addWidget(self.exposure_setting)
 
+        #slider for exposure delay
+        self.delay_label = QtWidgets.QLabel(f'Delay: {self.delay_time} ms')
+        horizontal_layout.addWidget(self.delay_label)
+        self.delay_setting = QtWidgets.QSlider(Qt.Horizontal)
+        self.delay_setting.setMinimum(0)
+        self.delay_setting.setMaximum(60)
+        self.delay_setting.setValue(self.delay_time)
+        self.delay_setting.setTickPosition(QtWidgets.QSlider.TicksBelow)
+        self.delay_setting.setTickInterval(2)
+        self.delay_setting.valueChanged.connect(self.delay_update)
+        horizontal_layout.addWidget(self.delay_setting)
+
         self.lbl_frame = QtWidgets.QLabel('FPS')
         horizontal_layout.addWidget(self.lbl_frame)
 
@@ -106,6 +119,9 @@ class GUI_main(QtWidgets.QMainWindow):
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
 
+    def set_delay(self, ms=35):
+        self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERDELAY , int(ms * 1000))  # gpio0 = 0x01
+
     def open_cam(self, maxspeed=False):
         self.cam = nncam.Nncam.Open(self.camID)
         if self.format == '24rgb':
@@ -129,6 +145,11 @@ class GUI_main(QtWidgets.QMainWindow):
         self.exposure_time = self.exposure_setting.value()
         self.exposure_label.setText(f'Exposure: {self.exposure_time} ms')
         self.set_exptime(float(self.exposure_time))
+
+    def delay_update(self):
+        self.delay_time = self.delay_setting.value()
+        self.delay_label.setText(f'Delay: {self.delay_time} ms')
+        self.set_delay(float(self.delay_time))
 
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
@@ -206,10 +227,9 @@ class GUI_main(QtWidgets.QMainWindow):
             if not self.has_writer:
                 self.set_handle()
             self.outfile.write(arr)
-            #TODO check if there's a way to pass buffer to writer
             self.frame_counter += 1
             # print(self.frame_counter)
-            if self.frame_counter % self.framerate:
+            if not self.frame_counter % self.framerate:
                 self.update_fps()
         if self.format in ('24rgb'):
             image = QImage(self.buf, self.sz[0], self.sz[1], QImage.Format_RGB888)
@@ -271,7 +291,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.open_cam(maxspeed=True)
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
-        self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERDELAY , 35)  # gpio0 = 0x01
+        self.set_delay()
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
 
 
@@ -291,7 +311,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.frame_counter = 0
                 self.outfile_handle = request['handle'] + self.file_ext
                 self.has_writer= False
-                logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}'
+                logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}, delay:{self.delay_time}'
                 message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)

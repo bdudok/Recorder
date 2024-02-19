@@ -298,8 +298,8 @@ class GUI_main(QtWidgets.QMainWindow):
                         response = json.loads(socket.recv_json())
                         go = response['go']
                     elif sname == 'scope':
-                        # time.sleep(5)  # witait for everything else to start.
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
+                        # time.sleep(1)  # witait for everything else to start
                     if go:
                         self.log.w(sname + ' running')
                     else:
