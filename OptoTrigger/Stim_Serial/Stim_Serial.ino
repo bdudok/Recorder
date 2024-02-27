@@ -64,7 +64,6 @@ void loop() {
         if(doc["a"] == "set") {
           setParams();
           getParams();
-          doc_back["OK"] = true;
           serializeJson(doc_back, Serial);
         }
         else {
@@ -91,6 +90,7 @@ void getParams() {
   doc_back["l"] = pulseDuration; 
   doc_back["d"] = pulseDelay; 
   doc_back["p"] = LEDPower;
+  doc_back["OK"] = true;
 }
 
 //generate output
