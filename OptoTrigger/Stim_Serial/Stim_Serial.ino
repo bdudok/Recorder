@@ -34,6 +34,7 @@ Timer<10> timer;
 //define serial variables
 volatile int size_ = 0;
 JsonDocument doc;
+JsonDocument doc_back;
 
 void setup() {
   //open serial comms
@@ -58,25 +59,39 @@ void loop() {
   if (!trainRunning) { // when no stim train is on, read the serial
       if (size_ = Serial.available()) {
         serialReading = true;
+        doc_back["OK"] = false;
         deserializeJson(doc, Serial);
         if(doc["a"] == "set") {
-          nPulsePerTrain = int(doc["n"]); 
-          pulseFrequency = float(doc["f"]); 
-          pulseDuration = int(doc["l"]); 
-          pulseDelay = int(doc["d"]); 
-          LEDPower = float(doc["p"]);
-          serializeJson(doc, Serial);
-          Serial.println("Settings received OK");
+          setParams();
+          getParams();
+          doc_back["OK"] = true;
+          serializeJson(doc_back, Serial);
         }
         else {
           Serial.println("Error!");
         }
+        delay(20);
+        serialReading = false;      
       }
-      delay(20);
-      serialReading = false;
   }
 }
 
+//parameter functions
+void setParams() {
+  nPulsePerTrain = int(doc["n"]); 
+  pulseFrequency = float(doc["f"]); 
+  pulseDuration = int(doc["l"]); 
+  pulseDelay = int(doc["d"]); 
+  LEDPower = float(doc["p"]);
+}
+
+void getParams() {
+  doc_back["n"] = nPulsePerTrain; 
+  doc_back["f"] = pulseFrequency; 
+  doc_back["l"] = pulseDuration; 
+  doc_back["d"] = pulseDelay; 
+  doc_back["p"] = LEDPower;
+}
 
 //generate output
 void startWaveForm() {
