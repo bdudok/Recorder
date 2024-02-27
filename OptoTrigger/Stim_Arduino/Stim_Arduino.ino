@@ -8,6 +8,8 @@ const byte outputPinShutter = 22; //digital output to trigger PMT shutter
 const byte outputPinGating = 52; //digital output to trigger PMT gating
 const byte outputPinLED = 12; //PWM output to drigger LED
 
+const bool testing = true;
+
 //define constants
 const int shutterDelayOpen = 22; //early command to start opening shutter
 const int shutterDelayClose = 6; //early command to start closing shutter
@@ -25,15 +27,17 @@ volatile int nPulses = 0;
 volatile int millisBetweenStim = 0;
 volatile bool trainRunning = false;
 elapsedMillis timeElapsed;
-Timer<6> timer;
+Timer<10> timer;
 
 
 void setup() {
   pinMode(outputPinShutter, OUTPUT);
   pinMode(outputPinGating, OUTPUT);
   pinMode(outputPinLED, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(interruptPinTrain), trigTrain, RISING);
-  attachInterrupt(digitalPinToInterrupt(interruptPinFrame), trigFrame, RISING);
+  pinMode(LED_BUILTIN, OUTPUT);
+  if (testing) {timer.every(5000, trigFrame);}
+  // attachInterrupt(digitalPinToInterrupt(interruptPinTrain), trigTrain, RISING);
+  // attachInterrupt(digitalPinToInterrupt(interruptPinFrame), trigFrame, RISING);
 }
 
 void loop() {
@@ -61,8 +65,14 @@ void timerShutterOff() {digitalWrite(outputPinShutter, LOW);}
 void timerGatingOn() {digitalWrite(outputPinGating, HIGH);}
 void timerGatingOff() {digitalWrite(outputPinGating, LOW);}
 //led
-void timerLEDOn() {analogWrite(outputPinLED, LEDPower*255);}
-void timerLEDOff() {digitalWrite(outputPinLED, LOW);}
+void timerLEDOn() {
+  analogWrite(outputPinLED, LEDPower*255);
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+void timerLEDOff() {
+  analogWrite(outputPinLED, 0);
+  digitalWrite(LED_BUILTIN, LOW);
+}
 
 //interrupt functions
 void trigTrain() {
@@ -71,7 +81,7 @@ void trigTrain() {
 }
 
 void trigFrame() {
-  if (nPulses < nPulsePerTrain) {
+  if ((nPulses < nPulsePerTrain) || testing) {
     if (timeElapsed > millisBetweenStim) {
       timeElapsed = 0;
       nPulses ++;
