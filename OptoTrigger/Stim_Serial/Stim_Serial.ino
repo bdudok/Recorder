@@ -33,8 +33,6 @@ Timer<10> timer;
 
 //define serial variables
 volatile int size_ = 0;
-volatile char payload[256];
-const size_t capacity = 1024;
 JsonDocument doc;
 
 void setup() {
@@ -60,24 +58,13 @@ void loop() {
   if (!trainRunning) { // when no stim train is on, read the serial
       if (size_ = Serial.available()) {
         serialReading = true;
-        // String string = "";
-        // for(int i =0; i < size_; i++) {
-        //   payload[i] = Serial.read();
-        //   string += payload[i];   
-        // }
-        // DynamicJsonDocument doc(capacity);
-        // DeserializationError error = deserializeJson(doc, string);
-        // if (error) {
-        //   Serial.println(error.c_str());
-        //   return;
-        // }
         deserializeJson(doc, Serial);
         if(doc["a"] == "set") {
-          // nPulsePerTrain = int(doc['n']); 
-          // pulseFrequency = float(doc['f']); 
-          // pulseDuration = int(doc['l']); 
-          // pulseDelay = int(doc['d']); 
-          // LEDPower = float(doc['p']);
+          nPulsePerTrain = int(doc["n"]); 
+          pulseFrequency = float(doc["f"]); 
+          pulseDuration = int(doc["l"]); 
+          pulseDelay = int(doc["d"]); 
+          LEDPower = float(doc["p"]);
           serializeJson(doc, Serial);
           Serial.println("Settings received OK");
         }

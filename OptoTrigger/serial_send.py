@@ -6,7 +6,7 @@ import pprint
 settings = {
     'n': 10,# number of photostimulations in each train
     'f': 2,# frequency of photostimulations in each train, Hz
-    'l': 10000,# duration of pulses, ms
+    'l': 10,# duration of pulses, ms
     'd': 20,# delay between frame start and stim start, ms
     'p': 0.6# LED power, relative of max
 }
@@ -15,7 +15,12 @@ settings = {
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train
 volatile int pulseDuration = 1000; //duration of photostimulation
 volatile int delayPulse = 100; //delay from trigger to start the waveform. 
-volatile float LEDPower = 0.6;'''
+volatile float LEDPower = 0.6;
+
+using these examples:
+https://stackoverflow.com/questions/55698070/sending-json-over-serial-in-python-to-arduino
+https://arduinojson.org
+'''
 
 serial_path = '/dev/tty.usbmodem32101'
 
@@ -25,6 +30,7 @@ message = json.dumps(data)
 incoming = ''
 retries = 1
 ser = serial.Serial(serial_path, baudrate=115200, timeout=2)
+time.sleep(0.1)
 while 'OK' not in incoming:
     print('Sending message, trials:', retries)
     if ser.isOpen():
