@@ -38,7 +38,7 @@ JsonDocument doc_back;
 
 void setup() {
   //open serial comms
-  Serial.begin(115200); 
+  Serial.begin(9600); 
   while(!Serial) {}
   //set up pin modes
   pinMode(outputPinShutter, OUTPUT);

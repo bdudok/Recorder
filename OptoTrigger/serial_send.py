@@ -27,21 +27,24 @@ serial_path = '/dev/tty.usbmodem32101'
 data = settings.copy()
 data['a'] = 'set'
 message = json.dumps(data)
+print('Message:', message)
 incoming = ''
 retries = 1
-ser = serial.Serial(serial_path, baudrate=115200, timeout=2)
+ser = serial.Serial(serial_path, baudrate=9600, timeout=2)
 while 'OK' not in incoming:
+    time.sleep(2)
     print('Sending message, trials:', retries)
     if ser.isOpen():
         ser.write(bytes(message, "utf-8"), )
+        ser.flush()
         try:
             incoming = ser.readline().decode("utf-8")
-            print(incoming)
+            print('Response:', incoming)
         except Exception as e:
             print(e)
     else:
-        ser = serial.Serial(serial_path, baudrate=115200, timeout=2)
+        ser = serial.Serial(serial_path, baudrate=9600, timeout=2)
     retries += 1
-    time.sleep(2)
+
 ser.close()
 
