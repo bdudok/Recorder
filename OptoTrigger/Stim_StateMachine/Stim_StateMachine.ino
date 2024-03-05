@@ -4,7 +4,7 @@
 //define pins 
 const byte interruptPinTrain = 2; //digital input to start a new train
 const byte interruptPinFrame = 3; //digital input to signal scope frame start
-const byte outputPinShutter = 22; //digital output to trigger PMT shutter
+const byte outputPinShutter = 24; //digital output to trigger PMT shutter
 const byte outputPinGating = 52; //digital output to trigger PMT gating
 const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
@@ -57,33 +57,32 @@ void setup() {
 
 void loop() {
   switch (state) {
-    case stateIdle: {readserial(); break;}
-    case stateWaitFrame: {break;}
-    case statePulseStart: {
+    case stateIdle:
+      readSerial();
+      break;
+    case stateWaitFrame:
+      break;
+    case statePulseStart:
         if (timeElapsed > timeLimit) {
           state = stateShutterOn;
         } else {break;}
-      }
-    case stateShutterOn:{
+    case stateShutterOn:
       ShutterOn();
       timeLimit = pulseDelay + shutterDelayOpen;
       state = stateLedOn;
-    }
-    case stateLedOn: {
+    case stateLedOn:
       if (timeElapsed > timeLimit) {
           LEDOn();
-          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration - shutterDelayClose
+          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration - shutterDelayClose;
           state = stateShutterOff;
       } else {break;}
-    }
-    case stateShutterOff: {
+    case stateShutterOff:
       if (timeElapsed > timeLimit) {
           ShutterOff();
-          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration
+          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration;
           state = stateLedOff;
       } else {break;}
-    }
-    case stateLedOff: {
+    case stateLedOff:
       if (timeElapsed > timeLimit) {
           LEDOff();
           if (nPulses < nPulsePerTrain) {
@@ -94,7 +93,6 @@ void loop() {
             state = stateIdle;
           }
       }
-    }
   }
 }
 
@@ -110,7 +108,7 @@ void readSerial() {
     else {
       Serial.println("Error!");
     }
-    delay(20);   
+    if (state == stateIdle) {delay(20);}   
   }
 }
 
@@ -163,5 +161,6 @@ void trigFrame() {
     timeElapsed = 0;
     timeLimit = pulseDelay;
     state = statePulseStart;
+  }
 }
 

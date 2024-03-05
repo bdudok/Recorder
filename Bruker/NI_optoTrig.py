@@ -44,8 +44,8 @@ with nidaqmx.Task('Pulse') as pulse_task:
     # train_task.triggers.start_trigger.cfg_dig_edge_start_trig("Dev1/port2/line0")
 
     # pulse_task.ao_channels.add_ao_voltage_chan("Dev1/ao0")
-    pulse_task.do_channels.add_do_chan("Dev1/port0/line0", line_grouping=LineGrouping.CHAN_FOR_ALL_LINES)
-    pulse_task.do_channels.add_do_chan("Dev1/port0/line1", line_grouping=LineGrouping.CHAN_FOR_ALL_LINES)
+    pulse_task.do_channels.add_do_chan("Dev1/port0/line0", name_to_assign_to_lines="Shutter")
+    pulse_task.do_channels.add_do_chan("Dev1/port0/line1", name_to_assign_to_lines="Gating")
     # pulse_task.timing.cfg_samp_clk_timing(fs)
 
 
@@ -57,9 +57,12 @@ with nidaqmx.Task('Pulse') as pulse_task:
 
 
     pulse_task.write(dig_out, auto_start=True)
+    # pulse_task.write([True,True,], auto_start=True)
 
     # train_task.start()
     pulse_task.start()
+
+    #GRRR, this is 3.6V
 
 
 # device = system.devices['Dev1']

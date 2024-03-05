@@ -10,17 +10,17 @@ const byte outputPinGating = 52; //digital output to trigger PMT gating
 const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
 
-const bool testing = true;
+const bool testing = false;
 
 //define constants
 const int shutterDelayOpen = 22; //early command to start opening shutter
 const int shutterDelayClose = 6; //early command to start closing shutter
 
 //define parameters (default values, can be set by serial)
-volatile int nPulsePerTrain = 3; //number of photostimulations in each train
+volatile int nPulsePerTrain = 10; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train
-volatile int pulseDuration = 500; //duration of pulses
-volatile int pulseDelay = 100; //delay from trigger to start the waveform. 
+volatile int pulseDuration = 10; //duration of pulses
+volatile int pulseDelay = 20; //delay from trigger to start the waveform. 
 volatile float LEDPower = 0.6;
 
 //define task varaibles
@@ -48,10 +48,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(interruptPinTrain), trigTrain, RISING);
   attachInterrupt(digitalPinToInterrupt(interruptPinFrame), trigFrame, RISING);
 
-  // if (testing) {
-  //   timer.every(1000, trigFrame);
-  //   timer.in(3000, trigTrain);
-  // }
+  if (testing) {
+    // timer.every(1000, trigFrame);
+    timer.in(3000, trigTrain);
+  }
 }
 
 void loop() {

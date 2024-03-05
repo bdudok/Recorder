@@ -4,10 +4,10 @@ import serial
 import pprint
 
 settings = {
-    'n': 10,# number of photostimulations in each train
-    'f': 2,# frequency of photostimulations in each train, Hz
-    'l': 100,# duration of pulses, ms
-    'd': 20,# delay between frame start and stim start, ms
+    'n': 50,# number of photostimulations in each train
+    'f': 0.5,# frequency of photostimulations in each train, Hz
+    'l': 10,# duration of pulses, ms
+    'd': 10,# delay between frame start and stim start, ms
     'p': 0.6# LED power, relative of max
 }
 
@@ -23,6 +23,7 @@ https://arduinojson.org
 '''
 
 serial_path = '/dev/tty.usbmodem32101'
+serial_path = 'COM12'
 
 data = settings.copy()
 data['a'] = 'set'
