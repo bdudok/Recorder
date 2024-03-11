@@ -158,9 +158,11 @@ void trigTrain() {
 
 void trigFrame() {
   if (state == stateWaitFrame) {
-    timeElapsed = 0;
-    timeLimit = pulseDelay;
-    state = statePulseStart;
+    if (nPulses == 0 || timeElapsed > millisBetweenStim) {
+      timeElapsed = 0;
+      timeLimit = pulseDelay;
+      state = statePulseStart;
+    }
   }
 }
 
