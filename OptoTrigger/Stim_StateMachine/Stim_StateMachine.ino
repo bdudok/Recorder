@@ -17,7 +17,7 @@ const int shutterDelayClose = 6; //early command to start closing shutter
 volatile int nPulsePerTrain = 10; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train, Hz
 volatile int pulseDuration = 10; //duration of pulses, ms
-volatile int pulseDelay = 1; //delay from trigger to start the waveform. , ms
+volatile int pulseDelay = 10; //delay from trigger to start the waveform. , ms
 volatile float LEDPower = 0.6; //fraction of max
 
 //define task varaibles
