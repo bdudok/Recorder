@@ -10,15 +10,15 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
 
 //define constants
-const int shutterDelayOpen = 22; //early command to start opening shutter
-const int shutterDelayClose = 6; //early command to start closing shutter
+const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
+const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 
 //define parameters (default values, can be set by serial)
 volatile int nPulsePerTrain = 10; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train, Hz
 volatile int pulseDuration = 10; //duration of pulses, ms
-volatile int pulseDelay = 10; //delay from trigger to start the waveform. , ms
-volatile float LEDPower = 0.6; //fraction of max
+volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
+volatile float LEDPower = 0.6; //fraction of max (0-1)
 
 //define task varaibles
 volatile int nPulses = 0;
