@@ -1,7 +1,7 @@
 # GUI
 import sys
 import numpy
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QElapsedTimer
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 from PyQt5.QtGui import QPixmap, QImage
 from Camera import nncam
@@ -80,6 +80,16 @@ class GUI_main(QtWidgets.QMainWindow):
         self.delay_setting.valueChanged.connect(self.delay_update)
         horizontal_layout.addWidget(self.delay_setting)
 
+        #dropdown for FPS limit
+        self.limit_box = QtWidgets.QComboBox()
+        self.fps_limits = {0: '<15 FPS', 1: '<30 FPS', 2: '<45 FPS', 3: '<60 FPS', 4: 'MAX'}
+        for key, value in self.fps_limits.items():
+            self.limit_box.insertItem(key, value)
+        self.limit_box.setCurrentIndex(2)
+        self.limit_box.currentIndexChanged.connect(self.limit_update)
+        horizontal_layout.addWidget(self.limit_box)
+
+
         self.lbl_frame = QtWidgets.QLabel('FPS')
         horizontal_layout.addWidget(self.lbl_frame)
 
@@ -140,6 +150,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.set_exptime()
         self.cam.put_AutoExpoEnable(0)
         self.cam.put_VFlip(1)
+        self.cam.put_HFlip(1)
 
     def exposure_update(self):
         self.exposure_time = self.exposure_setting.value()
@@ -150,6 +161,12 @@ class GUI_main(QtWidgets.QMainWindow):
         self.delay_time = self.delay_setting.value()
         self.delay_label.setText(f'Delay: {self.delay_time} ms')
         self.set_delay(float(self.delay_time))
+
+    def limit_update(self, index):
+        if index == 4:
+            self.camspeed = self.cam.MaxSpeed()
+        else:
+            self.camspeed = index
 
     def set_prefix(self, prefix):
         self.filename_label.setText(prefix)
@@ -171,6 +188,7 @@ class GUI_main(QtWidgets.QMainWindow):
         if state == 'armed':
             self.start_cam_live()
             self.live_toggle.setCheckable(False)
+            self.limit_box.setEnabled(False)
             self.arm_toggle.setStyleSheet("background-color : green")
             self.filename_label.setText('Waiting for recorder', )
             self.arm_toggle.setText('Armed')
@@ -178,6 +196,7 @@ class GUI_main(QtWidgets.QMainWindow):
             if self.is_writing:
                 self.is_writing = False
                 self.stop_cam()
+                self.save_container()
                 self.start_cam_live()
                 QTimer.singleShot(2000, self.release_outfile)
             self.arm_toggle.setStyleSheet("background-color : red")
@@ -220,6 +239,7 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def preview_update(self):
         if self.is_writing:
+            self.update_container()
             if self.format in ('24rgb'):
                 arr = numpy.frombuffer(self.buf, dtype='uint8').reshape((self.sz[1], self.sz[0], 3))
             elif self.format in ('8grey'):
@@ -262,6 +282,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.arm_toggle.setText('Arm')
             self.exposure_setting.setEnabled(True)
             self.live_toggle.setCheckable(True)
+            self.limit_box.setEnabled(True)
             self.timer.stop()
 
     def live(self):
@@ -288,12 +309,27 @@ class GUI_main(QtWidgets.QMainWindow):
         # print('start triggered called')
         if self.cam:
             self.stop_cam()
-        self.open_cam(maxspeed=True)
+        self.reset_container()
+        self.open_cam(maxspeed=False)
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
         self.set_delay()
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
 
+
+    def reset_container(self):
+        max_frames = int(100 * 60 * 60) #1 hr at 100 fps
+        self.internal_counter = 0
+        self.internal_timer = QElapsedTimer()
+        self.internal_timer.restart()
+        self.internal_container = numpy.empty((max_frames, 2), dtype='int64')
+
+    def update_container(self):
+        self.internal_container[self.internal_counter] = (self.frame_counter, self.internal_timer.elapsed(),)
+        self.internal_counter += 1
+
+    def save_container(self):
+        numpy.save(self.outfile_handle.replace(self.file_ext, '_CamTimers.npy'), self.internal_container[:self.internal_counter])
 
     def stop_cam(self):
         # print('stop called')
@@ -311,7 +347,8 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.frame_counter = 0
                 self.outfile_handle = request['handle'] + self.file_ext
                 self.has_writer= False
-                logstring = f'exp:{self.exposure_time}, fps:{self.framerate}, sz:{self.sz}, delay:{self.delay_time}'
+                fpsinex = self.limit_box.currentIndex()
+                logstring = f'exp:{self.exposure_time}, fps:{self.fps_limits[fpsinex]}, sz:{self.sz}, delay:{self.delay_time}'
                 message = {'set': True, 'exposure': self.exposure_time, 'log': logstring}
                 self.server.send_json(json.dumps(message))
                 self.arm_toggle.setEnabled(False)
