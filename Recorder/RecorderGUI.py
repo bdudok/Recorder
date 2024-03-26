@@ -199,7 +199,7 @@ class GUI_main(QtWidgets.QMainWindow):
         else:
             flist = [fn for fn in os.listdir(self.path) if os.path.isdir(os.path.join(self.path, fn))]
             counters = [fn.split('_')[-1].split('-')[0] for fn in flist]
-            c = len(flist)
+            c = max(len(flist), int(self.counter_field.text()))
             while f'{c:03}' in counters:
                 c += 1
             self.counter_field.setText(f'{c:03}')
@@ -298,8 +298,8 @@ class GUI_main(QtWidgets.QMainWindow):
                         response = json.loads(socket.recv_json())
                         go = response['go']
                     elif sname == 'scope':
-                        # time.sleep(5)  # witait for everything else to start.
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
+                        # time.sleep(1)  # witait for everything else to start
                     if go:
                         self.log.w(sname + ' running')
                     else:
