@@ -14,6 +14,7 @@ import json
 import zmq
 
 '''
+For Video-EEG
 App for displaying camera preview, setting exposure time, and saving stream during recording
 Acquisition start controlled by the recorder client (RecorderGUI)
 '''
@@ -25,6 +26,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.app = app
 
         #set variables
+        self.cam_index = 0
         self.wdir = 'C:\EEG/vid/'
         self.exposure_time = 4
         self.vidres = (1440, 1080)
@@ -36,34 +38,11 @@ class GUI_main(QtWidgets.QMainWindow):
         self.nsync = 0
         self.synctimes = numpy.empty((int(2*60*60/self.ipi), 5), dtype=numpy.int32)
         self.frame_counter = 0
+        self.bits = 24
 
         #open camera
-        a = nncam.Nncam.EnumV2()
-        self.cam = nncam.Nncam.Open(a[0].id)
-        self.bits = 24
-        # print(a[i].id, 'connected')
-        self.cam.put_Speed(self.camspeed)
-        self.sz = self.cam.get_Size()  # width, height
-        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
-        self.buf = bytes(self.bufsize)
-        self.set_exptime()
-        self.cam.put_AutoExpoEnable(0)
-        self.cam.put_VFlip(1)
-        self.pDate = None
-
-        #set trigger out
-        # print(f'IO mode: {self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_GET_SUPPORTEDMODE, 0x02)}')  # 0x01 = Output}')
-        self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
-        self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
-        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01)  # gpio0 = 0x01
-        #gpio0 is line 2
-        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # 0x01 = Output
-        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_FORMAT, 0x02)  # 0x02 = TTL
-        self.op_state = True
-        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
-
-        # self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTMODE, 0x01)  # 0x03 = User output
-
+        self.camlist = nncam.Nncam.EnumV2()
+        self.open_camera()
 
         #set up output
         # self.timer = QTimer(self)
@@ -81,6 +60,15 @@ class GUI_main(QtWidgets.QMainWindow):
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
+        #camera selector
+        horizontal_layout.addWidget(QtWidgets.QLabel('Cam'))
+        self.cam_box = QtWidgets.QComboBox()
+        for cami in range(len(self.camlist)):
+            self.cam_box.insertItem(cami, str(cami))
+        self.cam_box.setCurrentIndex(self.cam_index)
+        self.cam_box.currentIndexChanged.connect(self.open_camera)
+        horizontal_layout.addWidget(self.cam_box)
+
         #slider for exposure time
         self.exposure_label = QtWidgets.QLabel(f'Exposure: {self.exposure_time} ms')
         horizontal_layout.addWidget(self.exposure_label)
@@ -138,6 +126,25 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.show()
 
+    def open_camera(self):
+        self.cam = nncam.Nncam.Open(self.camlist[self.cam_index].id)
+        self.cam.put_Speed(self.camspeed)
+        self.sz = self.cam.get_Size()  # width, height
+        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
+        self.buf = bytes(self.bufsize)
+        self.set_exptime()
+        self.cam.put_AutoExpoEnable(0)
+        self.cam.put_VFlip(1)
+        self.pDate = None
+        #set trigger out
+        self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
+        self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
+        #gpio0 is line 2
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # 0x01 = Output
+        self.op_state = True
+        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
+
+
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
 
@@ -156,6 +163,8 @@ class GUI_main(QtWidgets.QMainWindow):
     def set_handle(self):
         timestamp = datetime.datetime.now().isoformat(timespec='seconds').replace(':', '-')
         self.outfile_handle = os.path.join(self.wdir, self.filename_label.text()+'-'+timestamp+self.file_ext)
+        if not os.path.exists(self.wdir):
+            os.mkdir(self.wdir)
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, (self.sz[0], self.sz[1]))
         print('Saving file:', self.outfile_handle)
         self.nsync = 0

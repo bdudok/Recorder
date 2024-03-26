@@ -12,6 +12,7 @@ import json
 import zmq
 
 '''
+For behavior cam on 2P
 App for displaying camera preview, setting exposure time, and saving stream during recording
 Acquisition start controlled by the recorder client (RecorderGUI)
 '''
