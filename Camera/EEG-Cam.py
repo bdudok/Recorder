@@ -41,6 +41,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.bits = 24
 
         #open camera
+        self.cam = None
         self.camlist = nncam.Nncam.EnumV2()
         self.open_camera()
 
@@ -66,7 +67,7 @@ class GUI_main(QtWidgets.QMainWindow):
         for cami in range(len(self.camlist)):
             self.cam_box.insertItem(cami, str(cami))
         self.cam_box.setCurrentIndex(self.cam_index)
-        self.cam_box.currentIndexChanged.connect(self.open_camera)
+        self.cam_box.currentIndexChanged.connect(self.change_camera)
         horizontal_layout.addWidget(self.cam_box)
 
         #slider for exposure time
@@ -117,32 +118,51 @@ class GUI_main(QtWidgets.QMainWindow):
         grid_layout.addWidget(self.lbl_video, 1, 0, 8, 10)
         self.centralWidget().setLayout(grid_layout)
 
-        #start live view
-        self.cam.StartPullModeWithCallback(self.cameraCallback, self)
-        # self.timer.start(int(1000/self.framerate))
-
-        # start software trigger
-        self.cam.Trigger(0xFFFF) #0xFFFF: continous trigger mode
+        self.start_preview()
 
         self.show()
 
+    def change_camera(self, index):
+        self.cam_index = index
+        self.open_camera()
+        self.start_preview()
+
+    def start_preview(self):
+        if self.cam_active:
+            #start live view
+            self.cam.StartPullModeWithCallback(self.cameraCallback, self)
+            # self.timer.start(int(1000/self.framerate))
+
+            # start software trigger
+            self.cam.Trigger(0xFFFF) #0xFFFF: continous trigger mode
+
     def open_camera(self):
-        self.cam = nncam.Nncam.Open(self.camlist[self.cam_index].id)
-        self.cam.put_Speed(self.camspeed)
-        self.sz = self.cam.get_Size()  # width, height
-        self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
-        self.buf = bytes(self.bufsize)
-        self.set_exptime()
-        self.cam.put_AutoExpoEnable(0)
-        self.cam.put_VFlip(1)
-        self.pDate = None
-        #set trigger out
-        self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
-        self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
-        #gpio0 is line 2
-        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # 0x01 = Output
-        self.op_state = True
-        self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
+        if self.cam is not None:
+            self.cam.Close()
+            self.cam = None
+        try:
+            self.cam = nncam.Nncam.Open(self.camlist[self.cam_index].id)
+            self.cam.put_Speed(self.camspeed)
+            success = True
+        except:
+            success = False
+            print(f'Cam {self.cam_index} could not be opened')
+        if success:
+            self.sz = self.cam.get_Size()  # width, height
+            self.bufsize = nncam.TDIBWIDTHBYTES(self.sz[0] * self.bits) * self.sz[1]
+            self.buf = bytes(self.bufsize)
+            self.set_exptime()
+            self.cam.put_AutoExpoEnable(0)
+            self.cam.put_VFlip(1)
+            self.pDate = None
+            #set trigger out
+            self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1) #0-video 1-software
+            self.cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, self.framerate)
+            #gpio0 is line 2
+            self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # 0x01 = Output
+            self.op_state = True
+            self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
+        self.cam_active = success
 
 
     def set_exptime(self, ms=8):
