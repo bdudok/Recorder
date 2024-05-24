@@ -9,7 +9,7 @@ acquisition control on Bruker (starts synchronous 2P, video, treadmill recording
 
 ## Camera
 ### Camera.CamGUI_v2
-control externally triggered TroupCam camera for 2P acquisition on the Bruker setup. 
+control externally triggered ToupCam camera for 2P acquisition on the Bruker setup. 
 ### Camera.EEG-Cam
 control camera for synchronous ephys recpording on Pinnacle setups.
 
