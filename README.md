@@ -1,5 +1,5 @@
 # Recorder
-Scripts for controlling cameras and acquisition in LNCM / Dudok lab
+Apps for controlling cameras and acquisition in LNCM / Dudok lab
 
 # The following libraries are included:
 
