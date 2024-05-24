@@ -16,7 +16,6 @@ import zmq
 '''
 For Video-EEG
 App for displaying camera preview, setting exposure time, and saving stream during recording
-Acquisition start controlled by the recorder client (RecorderGUI)
 '''
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
