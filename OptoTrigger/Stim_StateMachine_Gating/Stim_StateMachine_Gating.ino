@@ -10,14 +10,16 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
 
 //define constants
-const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
-const int shutterDelayClose = 6; //early command to start closing shutter (ms)
+const int gateMargin = 1; //milliseconds
+// const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
+// const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 
 //define parameters (default values, can be set by serial)
+const int maxDuration =  10; //gating this long, so don't do longer pulse
 volatile int nPulsePerTrain = 10; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train, Hz
-volatile int pulseDuration = 10; //duration of pulses, ms
-volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
+volatile int pulseDuration = min(maxDuration, 8); //duration of pulses, ms
+// volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
 volatile float LEDPower = 0.6; //fraction of max (0-1)
 
 //define task varaibles
@@ -32,9 +34,9 @@ const byte stateIdle = 0;
 // const byte stateTrainStart = 2;
 const byte stateWaitFrame = 1;
 const byte statePulseStart = 3;
-const byte stateShutterOn = 4;
+// const byte stateShutterOn = 4;
 const byte stateLedOn = 5;
-const byte stateShutterOff = 6;
+// const byte stateShutterOff = 6;
 const byte stateLedOff = 7;
 
 //define serial variables
@@ -64,24 +66,13 @@ void loop() {
       break;
     case statePulseStart:
         if (timeElapsed > timeLimit) {
-          state = stateShutterOn;
+          state = stateLedOn;
         } else {break;}
-    case stateShutterOn:
-      ShutterOn();
-      timeLimit = pulseDelay + shutterDelayOpen;
-      state = stateLedOn;
     case stateLedOn:
-      if (timeElapsed > timeLimit) {
-          LEDOn();
-          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration - shutterDelayClose;
-          state = stateShutterOff;
-      } else {break;}
-    case stateShutterOff:
-      if (timeElapsed > timeLimit) {
-          ShutterOff();
-          timeLimit = pulseDelay + shutterDelayOpen + pulseDuration;
-          state = stateLedOff;
-      } else {break;}
+        LEDOn();
+        timeLimit = pulseDuration;
+        state = stateLedOff;
+        break;
     case stateLedOff:
       if (timeElapsed > timeLimit) {
           LEDOff();
@@ -116,8 +107,8 @@ void readSerial() {
 void setParams() {
   nPulsePerTrain = int(doc["n"]); 
   pulseFrequency = float(doc["f"]); 
-  pulseDuration = int(doc["l"]); 
-  pulseDelay = int(doc["d"]); 
+  pulseDuration = min(maxDuration, int(doc["l"])); 
+  // pulseDelay = int(doc["d"]); 
   LEDPower = float(doc["p"]);
   millisBetweenStim = 1000 / pulseFrequency;
 }
@@ -126,26 +117,27 @@ void getParams() {
   doc_back["n"] = nPulsePerTrain; 
   doc_back["f"] = pulseFrequency; 
   doc_back["l"] = pulseDuration; 
-  doc_back["d"] = pulseDelay; 
+  // doc_back["d"] = pulseDelay; 
   doc_back["p"] = LEDPower;
   doc_back["OK"] = true;
 }
 
 //output functions
 //shutter
-void ShutterOn() {digitalWrite(outputPinShutter, HIGH);}
-void ShutterOff() {digitalWrite(outputPinShutter, LOW);}
-//gating
-// void timerGatingOn() {digitalWrite(outputPinGating, HIGH);}
-// void timerGatingOff() {digitalWrite(outputPinGating, LOW);}
+// void ShutterOn() {digitalWrite(outputPinShutter, HIGH);}
+// void ShutterOff() {digitalWrite(outputPinShutter, LOW);}
+
 //led
 void LEDOn() {
+  digitalWrite(outputPinGating, HIGH);
   digitalWrite(LED_BUILTIN, HIGH);
   analogWrite(outputPinLED, LEDPower*255);
 }
 void LEDOff() {
   analogWrite(outputPinLED, 0);
   digitalWrite(LED_BUILTIN, LOW);
+  delay(gateMargin);
+  digitalWrite(outputPinGating, LOW);
 }
 
 //interrupt functions
@@ -160,7 +152,7 @@ void trigFrame() {
   if (state == stateWaitFrame) {
     if (nPulses == 0 || timeElapsed > millisBetweenStim) {
       timeElapsed = 0;
-      timeLimit = pulseDelay;
+      timeLimit = 0;
       state = statePulseStart;
     }
   }

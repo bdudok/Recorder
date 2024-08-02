@@ -4,10 +4,11 @@ import serial
 import pprint
 
 settings = {
-    'n': 50,# number of photostimulations in each train
-    'f': 0.5,# frequency of photostimulations in each train, Hz
-    'l': 10,# duration of pulses, ms
-    'd': 10,# delay between frame start and stim start, ms
+    'n': 5,# number of photostimulations in each train
+    'f': 2.0,# frequency of photostimulations in each train, Hz
+    'l': 5,# duration of pulses, ms
+    'd': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
+    #(d not implemented for Gating version)
     'p': 0.6# LED power, relative of max
 }
 
@@ -22,8 +23,8 @@ https://stackoverflow.com/questions/55698070/sending-json-over-serial-in-python-
 https://arduinojson.org
 '''
 
-serial_path = '/dev/tty.usbmodem32101'
-serial_path = 'COM12'
+serial_path = '/dev/tty.usbmodem32101' #mac
+serial_path = 'COM12' #Windows
 
 data = settings.copy()
 data['a'] = 'set'
