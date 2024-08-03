@@ -29,6 +29,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.path = None
         self.saved_fields = ('project_field', 'animal_field', 'prefix_field')
         self.settings_name = self.wdir + '_recorder_fields.json'
+        self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/"+'"'+'\\'
         if os.path.exists(self.settings_name):
             with open(self.settings_name) as f:
                 self.settings_dict = json.load(f)
@@ -191,7 +192,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.update_folder()
 
     def update_folder(self):
-        self.path = '/'.join((self.wdir, self.project_field.text(), ))
+        fn = ''.join([c for c in self.project_field.text() if c not in self.stripchars])
+        self.path = '/'.join((self.wdir, fn))
         if not os.path.exists(self.path):
             os.mkdir(self.path)
             print('Creating folder:', self.path)
@@ -208,6 +210,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.update_folder()
         fn = '_'.join((self.animal_field.text(), self.date_field.text(),
                        self.prefix_field.text(), self.counter_field.text()))
+        # sanitize it because ppl use whatever
+        fn = ''.join([c for c in fn if c not in self.stripchars])
         self.prefix = fn
         self.fname_label.setText(self.prefix)
         self.file_handle = '/'.join((self.path, self.prefix))
