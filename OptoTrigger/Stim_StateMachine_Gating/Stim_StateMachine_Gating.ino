@@ -26,7 +26,7 @@ volatile float LEDPower = 0.6; //fraction of max (0-1)
 volatile int nPulses = 0;
 volatile float millisBetweenStim = 1000 / pulseFrequency;
 elapsedMillis timeElapsed;
-volatile float timeLimit = 0;
+// volatile float timeLimit = 0;
 
 //define state machine variables
 volatile byte state = 0;
@@ -35,9 +35,9 @@ const byte stateIdle = 0;
 const byte stateWaitFrame = 1;
 const byte statePulseStart = 3;
 // const byte stateShutterOn = 4;
-const byte stateLedOn = 5;
+// const byte stateLedOn = 5;
 // const byte stateShutterOff = 6;
-const byte stateLedOff = 7;
+// const byte stateLedOff = 7;
 
 //define serial variables
 volatile int size_ = 0;
@@ -65,24 +65,17 @@ void loop() {
     case stateWaitFrame:
       break;
     case statePulseStart:
-        if (timeElapsed > timeLimit) {
-          state = stateLedOn;
-        } else {break;}
-    case stateLedOn:
-        LEDOn();
-        timeLimit = pulseDuration;
-        state = stateLedOff;
-        break;
-    case stateLedOff:
-      if (timeElapsed > timeLimit) {
-          LEDOff();
-          if (nPulses < nPulsePerTrain) {
-            nPulses ++;
-            state = stateWaitFrame;
-          }
-          else {
-            state = stateIdle;
-          }
+    //doing the full sequence in a single state using delay
+    //this is to avoid the possibility of led staying on as gating wears off
+      LEDOn();
+      delay(pulseDuration);
+      LEDOff();
+      if (nPulses < nPulsePerTrain) {
+        nPulses ++;
+        state = stateWaitFrame;
+      }
+      else {
+        state = stateIdle;
       }
   }
 }
@@ -152,7 +145,7 @@ void trigFrame() {
   if (state == stateWaitFrame) {
     if (nPulses == 0 || timeElapsed > millisBetweenStim) {
       timeElapsed = 0;
-      timeLimit = 0;
+      // timeLimit = 0;
       state = statePulseStart;
     }
   }

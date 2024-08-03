@@ -7,7 +7,7 @@ settings = {
     'n': 5,# number of photostimulations in each train
     'f': 2.0,# frequency of photostimulations in each train, Hz
     'l': 5,# duration of pulses, ms
-    'd': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
+    #'d': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
     #(d not implemented for Gating version)
     'p': 0.6# LED power, relative of max
 }
