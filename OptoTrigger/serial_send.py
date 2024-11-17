@@ -3,15 +3,42 @@ import json
 import serial
 import pprint
 
-settings = {
-    'n': 5,# number of photostimulations in each train
+setting_name = 'electrical'
+
+configs = {}
+
+configs['baseline'] = {
+    'n': 10,# number of photostimulations in each train
     'f': 2.0,# frequency of photostimulations in each train, Hz
-    'l': 5,# duration of pulses, ms
-    #'d': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
-    #(d not implemented for Gating version)
-    'p': 0.6# LED power, relative of max
+    'l': 8,# duration of pulses, ms
+    'p': 0.8# LED power, relative of max
 }
 
+configs['PTZ'] = {
+    'n': 19,# number of photostimulations in each train
+    'f': 1.0,# frequency of photostimulations in each train, Hz
+    'l': 8,# duration of pulses, ms
+    'p': 0.8# LED power, relative of max
+}
+
+configs['large'] = {
+    'n': 10,# number of photostimulations in each train
+    'f': 1.0,# frequency of photostimulations in each train, Hz
+    'l': 8,# duration of pulses, ms
+    'p': 0.8# LED power, relative of max
+}
+
+configs['electrical'] = {
+    'n': 1,# number of photostimulations in each train
+    'f': 1,# frequency of photostimulations in each train, Hz
+    'l': 5,# duration of pulses, ms
+    'p': 1.0, # LED power, relative of max
+    'g': False #disable gating
+}
+
+settings = configs[setting_name]
+# 'd': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
+# (d not implemented for Gating version)
 '''
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train
 volatile int pulseDuration = 1000; //duration of photostimulation

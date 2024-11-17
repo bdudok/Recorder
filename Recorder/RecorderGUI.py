@@ -303,7 +303,7 @@ class GUI_main(QtWidgets.QMainWindow):
                         go = response['go']
                     elif sname == 'scope':
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
-                        # time.sleep(1)  # witait for everything else to start
+                        time.sleep(0.5)  # wait for everything else to start
                     if go:
                         self.log.w(sname + ' running')
                     else:

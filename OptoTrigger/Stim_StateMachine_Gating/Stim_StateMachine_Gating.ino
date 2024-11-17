@@ -21,6 +21,7 @@ volatile float pulseFrequency = 2.0; //frequency of photostimulations in each tr
 volatile int pulseDuration = min(maxDuration, 8); //duration of pulses, ms
 // volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
 volatile float LEDPower = 0.6; //fraction of max (0-1)
+volatile bool activateGating = true; //can be disabled for electrical stimulation
 
 //define task varaibles
 volatile int nPulses = 0;
@@ -70,8 +71,8 @@ void loop() {
       LEDOn();
       delay(pulseDuration);
       LEDOff();
+      nPulses ++;
       if (nPulses < nPulsePerTrain) {
-        nPulses ++;
         state = stateWaitFrame;
       }
       else {
@@ -103,6 +104,12 @@ void setParams() {
   pulseDuration = min(maxDuration, int(doc["l"])); 
   // pulseDelay = int(doc["d"]); 
   LEDPower = float(doc["p"]);
+  if (doc["g"] == false) {
+    activateGating = false;
+  }
+  else {
+    activateGating = true;
+  }
   millisBetweenStim = 1000 / pulseFrequency;
 }
 
@@ -112,6 +119,7 @@ void getParams() {
   doc_back["l"] = pulseDuration; 
   // doc_back["d"] = pulseDelay; 
   doc_back["p"] = LEDPower;
+  doc_back["g"] = activateGating;
   doc_back["OK"] = true;
 }
 
@@ -122,15 +130,19 @@ void getParams() {
 
 //led
 void LEDOn() {
-  digitalWrite(outputPinGating, HIGH);
+  if (activateGating) {
+    digitalWrite(outputPinGating, HIGH);
+  }
   digitalWrite(LED_BUILTIN, HIGH);
   analogWrite(outputPinLED, LEDPower*255);
 }
 void LEDOff() {
   analogWrite(outputPinLED, 0);
   digitalWrite(LED_BUILTIN, LOW);
-  delay(gateMargin);
-  digitalWrite(outputPinGating, LOW);
+  if (activateGating) {
+    delay(gateMargin);
+    digitalWrite(outputPinGating, LOW);
+  }
 }
 
 //interrupt functions
