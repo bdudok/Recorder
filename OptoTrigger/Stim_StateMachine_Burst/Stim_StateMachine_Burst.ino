@@ -10,30 +10,34 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
 
 //define constants
-const String scriptVersion = "g";
+const String scriptVersion = "b";
 const int gateMargin = 1; //milliseconds
-// const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
-// const int shutterDelayClose = 6; //early command to start closing shutter (ms)
+const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
+const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 
 //define parameters (default values, can be set by serial)
 const int maxDuration =  10; //gating this long, so don't do longer pulse
-volatile int nPulsePerTrain = 10; //number of photostimulations in each train
+volatile int nPulsePerTrain = 1; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train, Hz
 volatile int pulseDuration = min(maxDuration, 8); //duration of pulses, ms
 // volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
 volatile float LEDPower = 0.6; //fraction of max (0-1)
 volatile bool activateGating = true; //can be disabled for electrical stimulation
+volatile int nBaselinePulses = 10;
+volatile int burstDuration = 2000; //duration of burst, ms
 
 //define task varaibles
 volatile int nPulses = 0;
+volatile int nCompletedBl = 0;
+volatile int nCompletedBurst = 0;
 volatile float millisBetweenStim = 1000 / pulseFrequency;
 elapsedMillis timeElapsed;
-// volatile float timeLimit = 0;
+
 
 //define state machine variables
 volatile byte state = 0;
 const byte stateIdle = 0;
-// const byte stateTrainStart = 2;
+const byte stateBurstStart = 2;
 const byte stateWaitFrame = 1;
 const byte statePulseStart = 3;
 // const byte stateShutterOn = 4;
@@ -47,6 +51,7 @@ JsonDocument doc;
 JsonDocument doc_back;
 
 void setup() {
+  resetCounters();
   //open serial comms
   Serial.begin(9600); 
   while(!Serial) {}
@@ -77,14 +82,27 @@ void loop() {
         state = stateWaitFrame;
       }
       else {
+        nCompletedBl ++;
         state = stateIdle;
       }
+      break;
+    case stateBurstStart:
+    //close shutter and do continuous light
+      ShutterOn();
+      delay(shutterDelayOpen);
+      LEDOn();
+      delay(burstDuration);
+      LEDOff();
+      delay(shutterDelayClose);
+      nCompletedBurst ++;
+      state = stateIdle;
   }
 }
 
 void readSerial() {
   if (size_ = Serial.available()) {
     doc_back["OK"] = false;
+    resetCounters();
     deserializeJson(doc, Serial);
     if (doc["v"] == scriptVersion) {
       if(doc["a"] == "set") {
@@ -105,9 +123,10 @@ void readSerial() {
 
 //parameter functions
 void setParams() {
-  nPulsePerTrain = int(doc["n"]); 
+  nBaselinePulses = int(doc["n"]);
   pulseFrequency = float(doc["f"]); 
-  pulseDuration = min(maxDuration, int(doc["l"])); 
+  pulseDuration = min(maxDuration, int(doc["l"]));
+  burstDuration = int(1000 * float(doc["b"]));
   // pulseDelay = int(doc["d"]); 
   LEDPower = float(doc["p"]);
   if (doc["g"] == false) {
@@ -120,19 +139,26 @@ void setParams() {
 }
 
 void getParams() {
-  doc_back["n"] = nPulsePerTrain; 
+  doc_back["n"] = nBaselinePulses;
   doc_back["f"] = pulseFrequency; 
-  doc_back["l"] = pulseDuration; 
+  doc_back["l"] = pulseDuration;
+  doc_back["b"] = burstDuration;
   // doc_back["d"] = pulseDelay; 
   doc_back["p"] = LEDPower;
   doc_back["g"] = activateGating;
   doc_back["OK"] = true;
 }
 
+void resetCounters() {
+// called by serial, so that counters can be reset between recordings
+    volatile int nCompletedBl = 0;
+    volatile int nCompletedBurst = 0;
+}
+
 //output functions
 //shutter
-// void ShutterOn() {digitalWrite(outputPinShutter, HIGH);}
-// void ShutterOff() {digitalWrite(outputPinShutter, LOW);}
+void ShutterOn() {digitalWrite(outputPinShutter, HIGH);}
+void ShutterOff() {digitalWrite(outputPinShutter, LOW);}
 
 //led
 void LEDOn() {
@@ -164,7 +190,12 @@ void trigFrame() {
     if (nPulses == 0 || timeElapsed > millisBetweenStim) {
       timeElapsed = 0;
       // timeLimit = 0;
-      state = statePulseStart;
+      if ((nCompletedBl < nBaselinePulses) || (nCompletedBurst > 0)) {
+        state = statePulseStart;
+      }
+      else {
+        state = stateBurstStart;
+      }
     }
   }
 }

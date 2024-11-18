@@ -3,7 +3,15 @@ import json
 import serial
 import pprint
 
-setting_name = 'electrical'
+'''
+Specify the name of the configuration to use below.
+Please do not edit the configurations unless you understand what you're doing.
+For photostimulation, never use a config that disables the PMT gating.
+The comments of the settings tell which arduino script has to be uploaded (from OptoTrigger).
+If there's a mismatch, your settings won't be applied, don't start the experiment until resolved.
+'''
+
+setting_name = 'burst'
 
 configs = {}
 
@@ -12,7 +20,7 @@ configs['baseline'] = {
     'f': 2.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
-    'v': 'g', #arduino script version. 'g' for gating
+    'v': 'g', #arduino script version. 'g' for Stim_StateMachine_Gating
 }
 
 configs['PTZ'] = {
@@ -20,7 +28,7 @@ configs['PTZ'] = {
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
-    'v': 'g',  #arduino script version. 'g' for gating
+    'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
 }
 
 configs['large'] = {
@@ -28,7 +36,7 @@ configs['large'] = {
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8, # LED power, relative of max
-    'v': 'g',  #arduino script version. 'g' for gating
+    'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
 }
 
 configs['electrical'] = {
@@ -37,7 +45,17 @@ configs['electrical'] = {
     'l': 5,# duration of pulses, ms
     'p': 1.0, # LED power, relative of max
     'g': False, #disable gating
-    'v': 'g', #arduino script version. 'g' for gating
+    'v': 'g', #arduino script version. 'g' for Stim_StateMachine_Gating
+}
+
+configs['burst'] = { #this does single pulses (baseline), then a burst, then continues pulses.  Stim_StateMachine_Burst
+    #send the config before each recording to reset counters!
+    'n': 3,# number of photostimulations in baseline (before burst)
+    'f': 1,# frequency of photostimulations during baseline and after burst, Hz
+    'l': 5,# duration of pulses, ms
+    'p': 1.0, # LED power, relative of max
+    'b': 2.0, #burst duration, s
+    'v': 'b', #arduino script version. 'b' for Stim_StateMachine_Burst
 }
 
 settings = configs[setting_name]
