@@ -14,6 +14,8 @@ const String scriptVersion = "b";
 const int gateMargin = 1; //milliseconds
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
+// note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
+  // (laser > 0). Do not test shutter without acquisition running, it won't work.
 
 //define parameters (default values, can be set by serial)
 const int maxDuration =  10; //gating this long, so don't do longer pulse
@@ -94,6 +96,7 @@ void loop() {
       delay(burstDuration);
       LEDOff();
       delay(shutterDelayClose);
+      ShutterOff();
       nCompletedBurst ++;
       state = stateIdle;
   }

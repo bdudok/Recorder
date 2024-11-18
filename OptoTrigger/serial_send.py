@@ -50,7 +50,7 @@ configs['electrical'] = {
 
 configs['burst'] = { #this does single pulses (baseline), then a burst, then continues pulses.  Stim_StateMachine_Burst
     #send the config before each recording to reset counters!
-    'n': 3,# number of photostimulations in baseline (before burst)
+    'n': 2,# number of photostimulations in baseline (before burst)
     'f': 1,# frequency of photostimulations during baseline and after burst, Hz
     'l': 5,# duration of pulses, ms
     'p': 1.0, # LED power, relative of max

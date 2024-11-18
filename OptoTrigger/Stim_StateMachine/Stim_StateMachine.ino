@@ -12,6 +12,8 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 //define constants
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
+// note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
+  // (laser > 0). Do not test shutter without acquisition running, it won't work.
 
 //define parameters (default values, can be set by serial)
 volatile int nPulsePerTrain = 10; //number of photostimulations in each train
