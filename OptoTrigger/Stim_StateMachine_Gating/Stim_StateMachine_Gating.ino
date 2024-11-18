@@ -7,6 +7,7 @@ const byte interruptPinFrame = 3; //digital input to signal scope frame start
 const byte outputPinShutter = 24; //digital output to trigger PMT shutter
 const byte outputPinGating = 51; //digital output to trigger PMT gating
 const byte outputPinLED = 12; //PWM output to drigger LED
+const String scriptVersion = "g";
 // (pin 13 is for builtin led)
 
 //define constants
@@ -85,13 +86,18 @@ void readSerial() {
   if (size_ = Serial.available()) {
     doc_back["OK"] = false;
     deserializeJson(doc, Serial);
-    if(doc["a"] == "set") {
-      setParams();
-      getParams();
-      serializeJson(doc_back, Serial);
+    if (doc["v"] == scriptVersion) {
+      if(doc["a"] == "set") {
+        setParams();
+        getParams();
+        serializeJson(doc_back, Serial);
+      }
+      else {
+        Serial.println("Error!");
+      }
     }
     else {
-      Serial.println("Error!");
+      Serial.println("Error, script version mismatch. Arduino has " + scriptVersion);
     }
     if (state == stateIdle) {delay(20);}   
   }

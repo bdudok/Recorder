@@ -11,21 +11,24 @@ configs['baseline'] = {
     'n': 10,# number of photostimulations in each train
     'f': 2.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
-    'p': 0.8# LED power, relative of max
+    'p': 0.8,# LED power, relative of max
+    'v': 'g', #arduino script version. 'g' for gating
 }
 
 configs['PTZ'] = {
     'n': 19,# number of photostimulations in each train
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
-    'p': 0.8# LED power, relative of max
+    'p': 0.8,# LED power, relative of max
+    'v': 'g',  #arduino script version. 'g' for gating
 }
 
 configs['large'] = {
     'n': 10,# number of photostimulations in each train
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
-    'p': 0.8# LED power, relative of max
+    'p': 0.8, # LED power, relative of max
+    'v': 'g',  #arduino script version. 'g' for gating
 }
 
 configs['electrical'] = {
@@ -33,7 +36,8 @@ configs['electrical'] = {
     'f': 1,# frequency of photostimulations in each train, Hz
     'l': 5,# duration of pulses, ms
     'p': 1.0, # LED power, relative of max
-    'g': False #disable gating
+    'g': False, #disable gating
+    'v': 'g', #arduino script version. 'g' for gating
 }
 
 settings = configs[setting_name]
@@ -53,6 +57,7 @@ https://arduinojson.org
 serial_path = '/dev/tty.usbmodem32101' #mac
 serial_path = 'COM12' #Windows
 
+print('Sending setting:', setting_name)
 data = settings.copy()
 data['a'] = 'set'
 message = json.dumps(data)
@@ -71,6 +76,8 @@ while 'OK' not in incoming:
             print('Response:', incoming)
         except Exception as e:
             print(e)
+        if 'script version mismatch' in incoming:
+            break
     else:
         ser = serial.Serial(serial_path, baudrate=9600, timeout=2)
     retries += 1
