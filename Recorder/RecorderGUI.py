@@ -8,7 +8,9 @@ from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import datetime
 import json
 import zmq
-import win32com.client
+#TODO test on scope setup
+# import win32com.client
+
 import pyperclip
 
 
@@ -23,11 +25,17 @@ class GUI_main(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
         self.app = app
 
+        # TODO test on scope setup
+        self.debug = True
+
         #default parameters
-        self.wdir = 'E:/_Recorder'
+        if self.debug:
+            self.wdir = '/Users/u247640/tmp'
+        else:
+            self.wdir = 'E:/_Recorder'
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
-        self.saved_fields = ('project_field', 'animal_field', 'prefix_field')
+        self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field')
         self.settings_name = self.wdir + '_recorder_fields.json'
         self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/"+'"'+'\\'
         if os.path.exists(self.settings_name):
@@ -46,7 +54,9 @@ class GUI_main(QtWidgets.QMainWindow):
         self.trm_socket = context.socket(zmq.REQ)
         self.trm_socket.connect(f"tcp://localhost:{treadmill_port}")
          #scope connection
-        self.PrairieLink = win32com.client.Dispatch("PrairieLink64.Application")
+        # TODO test on scope setup
+        if not self.debug:
+            self.PrairieLink = win32com.client.Dispatch("PrairieLink64.Application")
 
         # list of sockets to start and stop for each session
         #PrairieLink uses a different logic so will be added separately from the sockets.
@@ -134,6 +144,12 @@ class GUI_main(QtWidgets.QMainWindow):
         self.send_button.clicked.connect(self.send)
         horizontal_layout.addLayout(btn_layout)
 
+        #template prefix
+        self.template_label = QtWidgets.QLabel('Template', )
+
+        self.template_field = QtWidgets.QLineEdit(self)
+        self.template_field.setText('JEDI-Sncg104_2025-04-02_Veh_549-000')
+
         # label layout
         self.checkboxes = {}
         label_layout = QtWidgets.QVBoxLayout()
@@ -176,6 +192,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.setMinimumSize(1024, 98)
         self.setCentralWidget(centralwidget)
         bottom_row_layout = QtWidgets.QHBoxLayout()
+        bottom_row_layout.addWidget(self.template_label)
+        bottom_row_layout.addWidget(self.template_field)
         bottom_row_layout.addWidget(self.check_button)
         bottom_row_layout.addWidget(self.copy_button)
         bottom_row_layout.addWidget(self.fname_label)
