@@ -12,7 +12,8 @@ import zmq
 # import win32com.client
 
 import pyperclip
-
+from BaserowAPI.BaserowRequests import GetSessions
+from Recorder.config import *
 
 '''
 App for starting all connected recorders with the same prefix.
@@ -35,7 +36,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.wdir = 'E:/_Recorder'
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
-        self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field')
+        self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user')
         self.settings_name = self.wdir + '_recorder_fields.json'
         self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/"+'"'+'\\'
         if os.path.exists(self.settings_name):
@@ -44,6 +45,9 @@ class GUI_main(QtWidgets.QMainWindow):
             print(self.settings_dict)
         else:
             self.settings_dict = {}
+
+        #set up connection to Baserow database
+        self.db = GetSessions(token)
 
         #set up connections to each server
         context = zmq.Context()
@@ -129,6 +133,14 @@ class GUI_main(QtWidgets.QMainWindow):
         self.fname_label = QtWidgets.QLineEdit(self)
         self.fname_label.setText(self.prefix)
         horizontal_layout.addLayout(c_layout)
+
+        #user
+        u_layout = QtWidgets.QVBoxLayout()
+        u_layout.addWidget(QtWidgets.QLabel('User'))
+        self.user_field = QtWidgets.QComboBox(self)
+        self.user_field.addItems(user_list)
+        u_layout.addWidget(self.user_field)
+        horizontal_layout.addLayout(u_layout)
 
         # button
         btn_layout = QtWidgets.QVBoxLayout()
@@ -235,6 +247,14 @@ class GUI_main(QtWidgets.QMainWindow):
         self.file_handle = '/'.join((self.path, self.prefix))
         print(self.file_handle)
 
+        #get and populate session data
+        sdat = dict(self.db.get_session(self.template_field.text().strip(' \r\n\t')).iloc[0])
+        sdat['User'] = self.user_field.currentText()
+        sdat['Image.ID'] = self.prefix + '-000'
+        sdat['Task'] = 'MotionCorr'
+        sdat['Date'] = self.date_field.text()
+        self.sdat = sdat
+
     def copy_fname(self):
         pyperclip.copy(self.prefix + '-000')
 
@@ -339,6 +359,8 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.settings_dict[fieldname] = getattr(self, fieldname).text()
                 with open(self.settings_name, 'w') as f:
                     json.dump(self.settings_dict, f)
+                #after everything is started fine, create entry in BaseRow
+                self.db.put_new(self.sdat)
 
             ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
 
