@@ -14,11 +14,20 @@ import zmq
 import pyperclip
 from BaserowAPI.BaserowRequests import GetSessions
 from Recorder.config import *
+from OptoTrigger.serial_send import send_settings
 
 '''
 App for starting all connected recorders with the same prefix.
 Each recorder needs to listen to a separate port for requests
+To edit stimulator configs, go to Recorder.config
 '''
+
+
+config_list = list(stim_configs.keys())
+config_list.sort()
+script_list = list(set([y['v'] for x, y in stim_configs.items()]))
+script_list.sort()
+
 
 class GUI_main(QtWidgets.QMainWindow):
     def __init__(self, app, cam_port=5555, treadmill_port=5556, title='Recorder'):
@@ -36,7 +45,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.wdir = 'E:/_Recorder'
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
-        self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user')
+        self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user_field')
         self.settings_name = self.wdir + '_recorder_fields.json'
         self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/"+'"'+'\\'
         if os.path.exists(self.settings_name):
@@ -72,9 +81,19 @@ class GUI_main(QtWidgets.QMainWindow):
         # a state variable
         self.state = 'setup'
 
-        #central widget
-        centralwidget = QtWidgets.QWidget(self)
-        main_vert_layout = QtWidgets.QVBoxLayout()
+        #tabs
+        self.table_widget = QtWidgets.QWidget(self) #central widget
+        self.table_widget.layout = QtWidgets.QVBoxLayout(self.table_widget)
+        self.tabs = QtWidgets.QTabWidget()
+        self.tab1 = QtWidgets.QWidget()
+        self.tab2 = QtWidgets.QWidget()
+        self.tabs.resize(300, 100)
+
+        self.tabs.addTab(self.tab1, "Session")
+        self.tabs.addTab(self.tab2, "Stimulator")
+
+        ##TAB1 acquisition controls
+        self.tab1.layout = QtWidgets.QVBoxLayout()
         horizontal_layout = QtWidgets.QHBoxLayout()
 
         # add widgets
@@ -197,22 +216,78 @@ class GUI_main(QtWidgets.QMainWindow):
         trm_button_layout.addWidget(self.trm_response_label)
         label_layout.addLayout(trm_button_layout)
 
+        stim_button_layout = QtWidgets.QHBoxLayout()
+        self.stim_response_label = QtWidgets.QLabel('Stimulator', )
+        self.stim_response_label.setStyleSheet("background-color : grey")
+        self.stim_checkbox = QtWidgets.QCheckBox()
+        self.stim_checkbox.setChecked(False)
+        self.checkboxes['stim'] = self.stim_checkbox
+        stim_button_layout.addWidget(self.stim_checkbox)
+        stim_button_layout.addWidget(self.stim_response_label)
+        label_layout.addLayout(stim_button_layout)
+
         self.buttons = {'scope': self.scope_response_label, 'cam': self.cam_response_label,
                         'trm': self.trm_response_label}
         horizontal_layout.addLayout(label_layout)
 
         self.setMinimumSize(1024, 98)
-        self.setCentralWidget(centralwidget)
+        # self.setCentralWidget(centralwidget)
         bottom_row_layout = QtWidgets.QHBoxLayout()
         bottom_row_layout.addWidget(self.template_label)
         bottom_row_layout.addWidget(self.template_field)
         bottom_row_layout.addWidget(self.check_button)
         bottom_row_layout.addWidget(self.copy_button)
         bottom_row_layout.addWidget(self.fname_label)
-        main_vert_layout.addLayout(horizontal_layout)
-        main_vert_layout.addLayout(bottom_row_layout)
-        self.centralWidget().setLayout(main_vert_layout)
+        self.tab1.layout.addLayout(horizontal_layout)
+        self.tab1.layout.addLayout(bottom_row_layout)
+
+        #add all this on tab1
+        self.tab1.setLayout(self.tab1.layout)
+
+        #TAB2: stim controls
+        ##TAB1 acquisition controls
+        self.tab2.layout = QtWidgets.QVBoxLayout()
+        horizontal_layout = QtWidgets.QHBoxLayout()
+
+        #selector for configs
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel('Load Config'))
+        self.stim_config_field = QtWidgets.QComboBox(self)
+        self.stim_config_field.addItems(config_list)
+        self.stim_config_field.currentTextChanged.connect(self.select_config_callback)
+        layout.addWidget(self.stim_config_field)
+        horizontal_layout.addLayout(layout)
+
+        #selector for scripts
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel('Script version'))
+        self.script_config_field = QtWidgets.QComboBox(self)
+        self.script_config_field.addItems(script_list)
+        layout.addWidget(self.script_config_field)
+        horizontal_layout.addLayout(layout)
+
+        #fields for config
+        self.config_setting_fields = {}
+        for fieldname in stim_config_fields:
+            layout = QtWidgets.QVBoxLayout()
+            layout.addWidget(QtWidgets.QLabel(stim_field_labels[fieldname]))
+            self.config_setting_fields[fieldname] = QtWidgets.QLineEdit(self)
+            # self.config_setting_fields[fieldname].setText('')
+            layout.addWidget(self.config_setting_fields[fieldname])
+            horizontal_layout.addLayout(layout)
+
+        #add all this on tab2
+        self.tab2.layout.addLayout(horizontal_layout)
+        self.tab2.setLayout(self.tab2.layout)
+
+        #add tabs to table
+        self.table_widget.layout.addWidget(self.tabs)
+        self.table_widget.setLayout(self.table_widget.layout)
+
+        self.setCentralWidget(self.table_widget)
+        # self.centralWidget().setLayout(main_vert_layout)
         self.update_folder()
+        self.select_config_callback(config_list[0])
         self.show()
 
     def select_path_callback(self):
@@ -220,6 +295,12 @@ class GUI_main(QtWidgets.QMainWindow):
         self.wdir = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder', self.wdir)
         self.select_path_button.setText(self.wdir)
         self.update_folder()
+
+    def select_config_callback(self, configname):
+        config = stim_configs[configname]
+        self.script_config_field.setCurrentText(config['v'])
+        for fn in stim_config_fields:
+            self.config_setting_fields[fn].setText(str(config.get(fn, '')))
 
     def update_folder(self):
         fn = ''.join([c for c in self.project_field.text() if c not in self.stripchars])
@@ -289,6 +370,28 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.scope_response_label.setStyleSheet("background-color : red")
                     print('Scope connection failed',)
 
+            #set up stimulator
+            sname = 'stim'
+            if self.checkboxes[sname].isChecked() and success:
+                settings = {'v': self.script_config_field.currentText()}
+                for fn in stim_config_fields:
+                    v = self.config_setting_fields[fn].text()
+                    if len(v):
+                        settings[fn] = v
+                self.stim_response_label.setStyleSheet("background-color : lightred")
+                self.app.processEvents()
+                response = send_settings(self.stim_config_field.currentText(), settings)
+                rtext = response['message']
+                if not 'OK' in rtext:
+                    success = False
+                    self.stim_response_label.setStyleSheet("background-color : red")
+                    print('stim setup failed:', rtext)
+                else:
+                    #store config in DB
+                    self.sdat['Stim.Config'] = response['settings']
+                    self.log.w(sname + ' responds ' + rtext)
+                    self.stim_response_label.setStyleSheet("background-color : green")
+
             #set up camera
             sname = 'cam'
             if self.checkboxes[sname].isChecked() and success:
@@ -356,7 +459,11 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.send()
             else:
                 for fieldname in self.saved_fields:
-                    self.settings_dict[fieldname] = getattr(self, fieldname).text()
+                    if fieldname in ('user_field', ):
+                        v = getattr(self, fieldname).currentText() #dropdowns
+                    else:
+                        v = getattr(self, fieldname).text() #simple entry
+                    self.settings_dict[fieldname] = v
                 with open(self.settings_name, 'w') as f:
                     json.dump(self.settings_dict, f)
                 #after everything is started fine, create entry in BaseRow
