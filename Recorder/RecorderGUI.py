@@ -8,13 +8,13 @@ from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import datetime
 import json
 import zmq
-#TODO test on scope setup
-# import win32com.client
+import win32com.client
 
 import pyperclip
 from BaserowAPI.BaserowRequests import GetSessions
 from Recorder.config import *
-from OptoTrigger.serial_send import send_settings
+from OptoTrigger.serial_send import send_settings, configs
+stim_configs = configs
 
 '''
 App for starting all connected recorders with the same prefix.
@@ -35,8 +35,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.setWindowTitle(title)
         self.app = app
 
-        # TODO test on scope setup
-        self.debug = True
+        self.debug = False
 
         #default parameters
         if self.debug:
@@ -67,7 +66,6 @@ class GUI_main(QtWidgets.QMainWindow):
         self.trm_socket = context.socket(zmq.REQ)
         self.trm_socket.connect(f"tcp://localhost:{treadmill_port}")
          #scope connection
-        # TODO test on scope setup
         if not self.debug:
             self.PrairieLink = win32com.client.Dispatch("PrairieLink64.Application")
 
@@ -270,7 +268,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.config_setting_fields = {}
         for fieldname in stim_config_fields:
             layout = QtWidgets.QVBoxLayout()
-            layout.addWidget(QtWidgets.QLabel(stim_field_labels[fieldname]))
+            layout.addWidget(QtWidgets.QLabel(f"'{fieldname}':"+stim_field_labels[fieldname]))
             self.config_setting_fields[fieldname] = QtWidgets.QLineEdit(self)
             # self.config_setting_fields[fieldname].setText('')
             layout.addWidget(self.config_setting_fields[fieldname])
@@ -388,7 +386,7 @@ class GUI_main(QtWidgets.QMainWindow):
                     print('stim setup failed:', rtext)
                 else:
                     #store config in DB
-                    self.sdat['Stim.Config'] = response['settings']
+                    self.sdat['Stim.Config'] = json.dumps(response['settings'])
                     self.log.w(sname + ' responds ' + rtext)
                     self.stim_response_label.setStyleSheet("background-color : green")
 

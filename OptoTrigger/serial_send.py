@@ -84,6 +84,8 @@ def sanitize_settings(settings):
         data['l'] = round(float(settings['l']), 1) # duration of pulses, ms
     if 'p' in settings:
         data['p'] = round(float(settings['p']), 2) # LED power, relative of max
+    if 'b' in settings:
+        data['b'] = round(float(settings['b']), 2)  # burst duration, s
     if 'g' in settings:
         if settings['g'] in (True, 1, "True", "true"):
             data['g'] = True
@@ -124,3 +126,6 @@ def send_settings(setting_name, settings, verbose=True):
         retries += 1
     ser.close()
     return {'message': incoming, 'settings': settings}
+
+if __name__ == '__main__':
+    send_settings(setting_name, settings)
