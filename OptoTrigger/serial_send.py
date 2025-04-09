@@ -11,7 +11,7 @@ The comments of the settings tell which arduino script has to be uploaded (from 
 If there's a mismatch, your settings won't be applied, don't start the experiment until resolved.
 '''
 
-setting_name = 'burst'
+setting_name = 'PTZ'
 
 configs = {}
 
@@ -24,7 +24,7 @@ configs['baseline'] = {
 }
 
 configs['PTZ'] = {
-    'n': 19,# number of photostimulations in each train
+    'n': 1,# number of photostimulations in each train
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
@@ -50,11 +50,11 @@ configs['electrical'] = {
 
 configs['burst'] = { #this does single pulses (baseline), then a burst, then continues pulses.  Stim_StateMachine_Burst
     #send the config before each recording to reset counters!
-    'n': 2,# number of photostimulations in baseline (before burst)
-    'f': 1,# frequency of photostimulations during baseline and after burst, Hz
-    'l': 5,# duration of pulses, ms
+    'n': 50,# number of photostimulations in baseline (before burst)
+    #'f': 1,# frequency of photostimulations during baseline and after burst, Hz
+    'l': 8,# duration of pulses, ms
     'p': 1.0, # LED power, relative of max
-    'b': 2.0, #burst duration, s
+    'b': 1.0, #burst duration, s
     'v': 'b', #arduino script version. 'b' for Stim_StateMachine_Burst
 }
 
