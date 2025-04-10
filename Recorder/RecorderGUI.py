@@ -45,6 +45,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
         self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user_field')
+        self.selector_fields = ('user_field', )
         self.settings_name = self.wdir + '_recorder_fields.json'
         self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/"+'"'+'\\'
         if os.path.exists(self.settings_name):
@@ -134,11 +135,6 @@ class GUI_main(QtWidgets.QMainWindow):
         self.prefix_field.setText('movie')
         pf_layout.addWidget(self.prefix_field)
         horizontal_layout.addLayout(pf_layout)
-
-        #update fields from file
-        for fieldname in self.saved_fields:
-            if fieldname in self.settings_dict:
-                getattr(self, fieldname).setText(self.settings_dict[fieldname])
 
         #counter
         c_layout = QtWidgets.QVBoxLayout()
@@ -284,6 +280,14 @@ class GUI_main(QtWidgets.QMainWindow):
 
         self.setCentralWidget(self.table_widget)
         # self.centralWidget().setLayout(main_vert_layout)
+        #update fields from file
+        for fieldname in self.saved_fields:
+            if fieldname in self.settings_dict:
+                if fieldname in self.selector_fields:
+                    getattr(self, fieldname).setCurrentText(self.settings_dict[fieldname])
+                else:
+                    getattr(self, fieldname).setText(self.settings_dict[fieldname])
+
         self.update_folder()
         self.select_config_callback(config_list[0])
         self.show()
