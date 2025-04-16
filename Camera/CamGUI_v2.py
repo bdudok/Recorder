@@ -302,6 +302,7 @@ class GUI_main(QtWidgets.QMainWindow):
         # print('start called')
         if not self.cam:
             self.open_cam()
+            self.exposure_update()
             self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 0)
             self.cam.StartPullModeWithCallback(self.cameraCallback, self)
             self.live_toggle.setStyleSheet("background-color : green")
@@ -313,6 +314,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.reset_container()
         self.open_cam(maxspeed=False)
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
+        self.exposure_update()
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
         self.set_delay()
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
