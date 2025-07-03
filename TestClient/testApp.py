@@ -4,8 +4,8 @@ from pyqtgraph import Qt
 import zmq
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
-from Host.HostSocket import Socket as HostSocket
-from Client.ClientSocket import Socket as ClientSocket
+from TestHost.HostSocket import Socket as HostSocket
+from TestClient.ClientSocket import Socket as ClientSocket
 
 class GUI_main(QtWidgets.QMainWindow):
     def __init__(self, app, port=5555, title='Main'):
@@ -50,8 +50,8 @@ class GUI_main(QtWidgets.QMainWindow):
         #  Wait for next request from client
         print('listening')
         message = self.socket.recv_string()
-        # if self.gui is not None:
-        #     self.gui.response_label.setText(message)
+        if self.gui is not None:
+            self.gui.response_label.setText(message)
         #  Send reply back to client
         print(message)
         self.socket.send_string(message)
