@@ -19,13 +19,13 @@ App for displaying camera preview, setting exposure time, and saving stream duri
 '''
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, title='Main'):
+    def __init__(self, app, title='Main', camera_index=0):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
 
         #set variables
-        self.cam_index = 0
+        self.cam_index = camera_index
         self.wdir = 'C:\EEG/vid/'
         self.exposure_time = 4
         self.vidres = (1440, 1080)
@@ -306,4 +306,5 @@ def launch_GUI(*args, **kwargs):
     sys.exit(app.exec())
 
 if __name__ == '__main__':
-    launch_GUI(title='vEEG Camera',)
+    camera_index = int(input('Which camera to open? (0/1): '))
+    launch_GUI(title=f'vEEG Camera {camera_index}', camera_index = camera_index)
