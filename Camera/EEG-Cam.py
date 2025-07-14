@@ -230,17 +230,20 @@ class GUI_main(QtWidgets.QMainWindow):
 
     def sync_pulse(self):
         if self.is_writing:
-            rsync = self.nsync, *self.cam.get_FrameRate(), self.frame_counter
-            print(self.outfile_handle, f'TTL {rsync[0]}, Frame {rsync[-1]}')
-            self.synctimes[self.nsync] = rsync
-            self.nsync += 1
-            #flip GPIO hold
-            self.flip_on()
-            QTimer.singleShot(10, self.flip_off)
+            try:
+                rsync = self.nsync, *self.cam.get_FrameRate(), self.frame_counter
+                print(self.outfile_handle, f'TTL {rsync[0]}, Frame {rsync[-1]}')
+                self.synctimes[self.nsync] = rsync
+                self.nsync += 1
+                #flip GPIO hold
+                self.flip_on()
+                QTimer.singleShot(10, self.flip_off)
 
-            #re-trigger cam to get a ttl out
-            # self.cam.Trigger(0xFFFF)  # 0xFFFF: continous trigger mode
-            QTimer.singleShot(int(1000 * numpy.random.random()*1.8*self.ipi+0.1*self.ipi), self.sync_pulse)
+                #re-trigger cam to get a ttl out
+                # self.cam.Trigger(0xFFFF)  # 0xFFFF: continous trigger mode
+                QTimer.singleShot(int(1000 * numpy.random.random()*1.8*self.ipi+0.1*self.ipi), self.sync_pulse)
+            except Exception as e:
+                print('Exception in sync_pulse:', e)
 
     def flip_off(self):
         self.cam.IoControl(2, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self.op_state)
@@ -262,6 +265,9 @@ class GUI_main(QtWidgets.QMainWindow):
                 # print('pull image ok')#, total = {}'.format(self.total))
             except nncam.HRESULTException as ex:
                 print('pull image failed, hr=0x{:x}'.format(ex.hr & 0xffffffff))
+            except Exception as e:
+                print('Exception in CameraCallback', e)
+
         else:
             print('event callback: {}'.format(nEvent))
 
