@@ -18,7 +18,7 @@ configs = {}
 
 configs['baseline'] = {
     'n': 10,# number of photostimulations in each train
-    'f': 2.0,# frequency of photostimulations in each train, Hz
+    'f': 2,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
     'v': 'g', #arduino script version. 'g' for Stim_StateMachine_Gating
@@ -26,7 +26,7 @@ configs['baseline'] = {
 
 configs['PTZ'] = {
     'n': 1,# number of photostimulations in each train
-    'f': 1.0,# frequency of photostimulations in each train, Hz
+    'f': 1,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
     'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
