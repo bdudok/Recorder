@@ -4,14 +4,19 @@ from pyqtgraph import Qt
 import zmq
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
+'''
+Send requests to a remote computer on the domain network.
+Allow incoming on the TCP port in the firewall of the remote computer running the server app.
+'''
+
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, port=5555, title='Main'):
+    def __init__(self, app, port=5555, title='Main', host='10.18.5.124'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
         context = zmq.Context()
         self.socket = context.socket(zmq.REQ)
-        self.socket.connect(f"tcp://localhost:{port}")
+        self.socket.connect(f"tcp://{host}:{port}")
 
         #central widget
         centralwidget = QtWidgets.QWidget(self)

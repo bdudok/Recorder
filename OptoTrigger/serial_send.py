@@ -12,7 +12,7 @@ The comments of the settings tell which arduino script has to be uploaded (from 
 If there's a mismatch, your settings won't be applied, don't start the experiment until resolved.
 '''
 
-setting_name = 'PTZ'
+setting_name = 'burst'
 
 configs = {}
 
@@ -30,6 +30,15 @@ configs['PTZ'] = {
     'l': 8,# duration of pulses, ms
     'p': 0.8,# LED power, relative of max
     'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
+
+}
+
+configs['frequency'] = {
+    'n': 60,# number of photostimulations in each train
+    'f': 1.0,# frequency of photostimulations in each train, Hz
+    'l': 8,# duration of pulses, ms
+    'p': 0.8, # LED power, relative of max
+    'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
 }
 
 configs['large'] = {
@@ -37,6 +46,15 @@ configs['large'] = {
     'f': 1.0,# frequency of photostimulations in each train, Hz
     'l': 8,# duration of pulses, ms
     'p': 0.8, # LED power, relative of max
+    'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
+}
+
+configs['CCK'] = {
+    'n': 10,# number of photostimulations in each train
+    'f': 5.0,# frequency of photostimulations in each train, Hz
+    'l': 10,# duration of pulses, ms
+    'p': 1.0, # LED power, relative of max
+    'g': True, #disable gating
     'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
 }
 
