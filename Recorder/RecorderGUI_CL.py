@@ -545,7 +545,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.listen() #restart when complete while the box is checked
 
     def listen(self):
-        message = 'ready'
+        message = json.dumps({'ready': True})
         if self.remote_checkbox.isChecked():
             print('Listening for remote start.')
             self.listen_button.setStyleSheet("background-color : red")
@@ -569,7 +569,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 except zmq.error.Again:
                     timeout = True
             print('Message received:', response)
-            if 'run' in response and self.remote_checkbox.isChecked():
+            if 'ON' in response and self.remote_checkbox.isChecked():
                 self.listen_button.setStyleSheet("background-color : green")
                 self.app.processEvents()
                 self.send()
