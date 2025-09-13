@@ -47,8 +47,8 @@ class GUI_main(QtWidgets.QMainWindow):
         #  Wait for next request from client
         print('listening')
         message = self.socket.recv_string()
-        # if self.gui is not None:
-        #     self.gui.response_label.setText(message)
+        if self.gui is not None:
+            self.gui.response_label.setText(message)
         #  Send reply back to client
         print(message)
         self.socket.send_string(message)

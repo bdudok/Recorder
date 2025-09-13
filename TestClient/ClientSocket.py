@@ -17,3 +17,4 @@ class Socket:
 
 if __name__ == '__main__':
     s = Socket()
+    s.send('hello')

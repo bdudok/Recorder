@@ -1,11 +1,13 @@
 # GUI
+import json
 import sys
 from pyqtgraph import Qt
 import zmq
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 
+
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, port=5555, title='Main'):
+    def __init__(self, app, port=5557, title='Main'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
@@ -57,7 +59,8 @@ class GUI_main(QtWidgets.QMainWindow):
         self.response_label.setText(message)
         #  Send reply back to client
         print(message)
-        self.socket.send_string(message)
+        run_resp = json.dumps({'run': True})
+        self.socket.send_json(run_resp)
 
 
 
