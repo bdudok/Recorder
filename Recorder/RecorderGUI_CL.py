@@ -547,10 +547,15 @@ class GUI_main(QtWidgets.QMainWindow):
     def listen(self):
         message = json.dumps({'ready': True})
         if self.remote_checkbox.isChecked():
+            #set up recording
+            self.send_button.setEnabled(False)
+            self.state = 'setup'
+            self.send()
             print('Listening for remote start.')
             self.listen_button.setStyleSheet("background-color : red")
             self.app.processEvents()
             timeout = True
+            new_socket = True
             # if there's a timeout, we keep trying until there's a response
             # this way, if there is a request sent, it doesn't hang forever if there's any issue with the server
             # unfortunately a REP-REQ socket hangs is a request is not responded, so this way I need to create a new socket each time
@@ -558,27 +563,33 @@ class GUI_main(QtWidgets.QMainWindow):
             # for correct function, try starting the server before calling this
             while timeout:
                 # closed loop remote acquisition trigger socket
-                context = zmq.Context()
-                self.remote_socket = context.socket(zmq.REQ)
-                self.remote_socket.connect(f"tcp://{self.closedloop_host}:{self.closedloop_port}")
-                self.remote_socket.setsockopt(zmq.RCVTIMEO, 5000)
+                if new_socket:
+                    context = zmq.Context()
+                    self.remote_socket = context.socket(zmq.REQ)
+                    self.remote_socket.connect(f"tcp://{self.closedloop_host}:{self.closedloop_port}")
+                    self.remote_socket.setsockopt(zmq.RCVTIMEO, 5000)
                 self.remote_socket.send_json(message)
                 try:
                     response = json.loads(self.remote_socket.recv_json())
-                    timeout = False
+                    if 'ON' in response:
+                        if response['ON']:
+                            #exit loop if stim, keep asking the server otherwise
+                            timeout = False
                 except zmq.error.Again:
                     timeout = True
+                    new_socket = True
+                self.app.processEvents()
             print('Message received:', response)
             if 'ON' in response and self.remote_checkbox.isChecked():
                 self.listen_button.setStyleSheet("background-color : green")
                 self.app.processEvents()
-                self.send()
                 self.log.w('Staring acquisition on remote trigger.')
                 self.send() #clicking the button twice
             else:
                 self.listen_button.setStyleSheet("background-color : grey")
         else:
             self.listen_button.setStyleSheet("background-color : grey")
+        self.send_button.setEnabled(True)
         self.app.processEvents()
 
 
