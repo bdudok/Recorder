@@ -47,7 +47,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
         self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user_field', 'timer_field')
-        self.selector_fields = ('user_field',)
+        self.selector_fields = ('user_field', 'LED_field')
         self.settings_name = self.wdir + '_recorder_fields.json'
         self.stripchars = "'+. *?~!@#$%^&*(){}:[]><,/" + '"' + '\\'
         if os.path.exists(self.settings_name):
@@ -157,6 +157,15 @@ class GUI_main(QtWidgets.QMainWindow):
         self.user_field.addItems(user_list)
         u_layout.addWidget(self.user_field)
         horizontal_layout.addLayout(u_layout)
+
+        # LED
+        led_list = ('ON', 'OFF')
+        ll_layout = QtWidgets.QVBoxLayout()
+        ll_layout.addWidget(QtWidgets.QLabel('Pupil Light'))
+        self.LED_field = QtWidgets.QComboBox(self)
+        self.LED_field.addItems(led_list)
+        ll_layout.addWidget(self.LED_field)
+        horizontal_layout.addLayout(ll_layout)
 
         # name buttons
         self.check_button = QtWidgets.QPushButton('Check name', )
@@ -363,6 +372,7 @@ class GUI_main(QtWidgets.QMainWindow):
             sdat['Image.ID'] = self.prefix + '-000'
             sdat['Task'] = 'MotionCorr'
             sdat['Date'] = self.date_field.text()
+            sdat['PupilLight'] = self.LED_field.currentText()
             self.sdat = sdat
 
     def copy_fname(self):
@@ -561,7 +571,7 @@ class GUI_main(QtWidgets.QMainWindow):
             # unfortunately a REP-REQ socket hangs is a request is not responded, so this way I need to create a new socket each time
             # consider updating this to a different pattern
             # for correct function, try starting the server before calling this
-            while timeout:
+            while timeout and self.remote_checkbox.isChecked():
                 # closed loop remote acquisition trigger socket
                 if new_socket:
                     context = zmq.Context()
