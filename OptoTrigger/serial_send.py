@@ -12,7 +12,7 @@ The comments of the settings tell which arduino script has to be uploaded (from 
 If there's a mismatch, your settings won't be applied, don't start the experiment until resolved.
 '''
 
-setting_name = 'burst'
+setting_name = 'shutter'
 
 configs = {}
 
@@ -52,11 +52,20 @@ configs['large'] = {
 configs['CCK'] = {
     'n': 10,# number of photostimulations in each train
     'f': 5.0,# frequency of photostimulations in each train, Hz
-    'l': 10,# duration of pulses, ms
+    'l': 8,# duration of pulses, ms
     'p': 1.0, # LED power, relative of max
-    'g': True, #disable gating
+    'g': True, #False for disabling gating
     'v': 'g',  #arduino script version. 'g' for Stim_StateMachine_Gating
 }
+
+configs['shutter'] = {
+    'n': 1,# number of photostimulations in each train
+    'f': 1.0,# frequency of photostimulations in each train, Hz
+    'l': 30,# duration of pulses, ms
+    'p': 1.0, # LED power, relative of max
+    'v': 's',  #arduino script version. 'g' for Stim_StateMachine_Gating
+}
+
 
 configs['electrical'] = {
     'n': 1,# number of photostimulations in each train

@@ -10,6 +10,7 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 // (pin 13 is for builtin led)
 
 //define constants
+const String scriptVersion = "s";
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 // note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
@@ -102,13 +103,18 @@ void readSerial() {
   if (size_ = Serial.available()) {
     doc_back["OK"] = false;
     deserializeJson(doc, Serial);
-    if(doc["a"] == "set") {
-      setParams();
-      getParams();
-      serializeJson(doc_back, Serial);
+    if (doc["v"] == scriptVersion) {
+      if(doc["a"] == "set") {
+        setParams();
+        getParams();
+        serializeJson(doc_back, Serial);
+      }
+      else {
+        Serial.println("Error!");
+      }
     }
     else {
-      Serial.println("Error!");
+      Serial.println("Error, script version mismatch. Arduino has " + scriptVersion);
     }
     if (state == stateIdle) {delay(20);}   
   }
