@@ -13,6 +13,9 @@ control externally triggered ToupCam camera for 2P acquisition on the Bruker set
 ### Camera.EEG-Cam
 control camera for synchronous ephys recpording on Pinnacle setups.
 
+## VideoEEG
+video-EEG recorder for Pinnacle setups: continuous hourly video files and TTL sync pulses. Replaces Camera.EEG-Cam. See VideoEEG/README.md.
+
 ## OptoTrigger
 ## OptoTrigger.Stim_StateMachine
 accessory board for closed loop optogenetics on the Bruker setup.
