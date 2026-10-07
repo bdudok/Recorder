@@ -64,6 +64,8 @@ class NncamCamera:
         cam.put_ExpoTime(int(s.exposure_ms * 1000))
         cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 1)  # software trigger, run continuously below
         cam.put_Option(nncam.NNCAM_OPTION_FRAMERATE, s.framerate)
+        # The FRAMERATE limit alone runs the IUA1500KMA at 31.0 fps; the precise rate is in 0.1 fps.
+        self._try_option(nncam.NNCAM_OPTION_PRECISE_FRAMERATE, s.framerate * 10)
         self._try_option(nncam.NNCAM_OPTION_RGB, 3)  # 8-bit grey output on mono cameras
         self._try_option(nncam.NNCAM_OPTION_NOFRAME_TIMEOUT, 3000)
         cam.IoControl(TTL_LINE, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # output
