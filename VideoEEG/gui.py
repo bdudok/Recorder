@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import zmq
@@ -19,7 +20,9 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from VideoEEG import config
 
 REPO = Path(__file__).resolve().parents[1]
-POLL_MS = 200
+POLL_MS = 200       # status and normal preview refresh
+LIVE_MS = 33        # preview refresh in live view
+LIVE_S = 60         # live view duration
 
 
 class RecorderClient:
@@ -75,6 +78,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status = None
         self.fields_loaded = False
         self.missed = 0
+        self.live_until = 0.0
         self.setWindowTitle(f'vEEG camera {cam}')
         self.setMinimumSize(1024, 768)
 
@@ -93,6 +97,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.rec_button = QtWidgets.QPushButton()
         self.rec_button.setMinimumWidth(140)
         self.rec_button.clicked.connect(self.toggle_recording)
+        self.live_button = QtWidgets.QPushButton('Live view (1 min)')
+        self.live_button.setMinimumWidth(140)
+        self.live_button.clicked.connect(self.toggle_live)
 
         self.state_label = QtWidgets.QLabel()
         font = self.state_label.font()
@@ -114,6 +121,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row1 = QtWidgets.QHBoxLayout()
         row1.addWidget(self.exposure_label)
         row1.addWidget(self.exposure, stretch=1)
+        row1.addWidget(self.live_button)
         row1.addWidget(self.rec_button)
         row2 = QtWidgets.QHBoxLayout()
         row2.addWidget(self.folder_button)
@@ -138,6 +146,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(POLL_MS)
+        self.preview_timer = QtCore.QTimer(self)
+        self.preview_timer.timeout.connect(self.update_preview)
+        self.preview_timer.start(POLL_MS)
         self.update_controls()
 
     # --- commands ---
@@ -182,6 +193,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.prefix.setText(s['prefix'])
             self.fields_loaded = True
         self.update_controls()
+
+    def toggle_live(self):
+        self.live_until = 0.0 if self.live_until else time.time() + LIVE_S
+        self.preview_timer.setInterval(LIVE_MS if self.live_until else POLL_MS)
+        self.update_live_button()
+
+    def update_live_button(self):
+        if self.live_until and time.time() > self.live_until:
+            self.live_until = 0.0
+            self.preview_timer.setInterval(POLL_MS)
+        if self.live_until:
+            self.live_button.setText(f'Live view: {self.live_until - time.time():.0f} s')
+            self.live_button.setStyleSheet('background-color: #2e7d32; color: white')
+        else:
+            self.live_button.setText('Live view (1 min)')
+            self.live_button.setStyleSheet('')
+
+    def update_preview(self):
+        self.update_live_button()
+        if self.status is None:
+            return
         reply, data = self.client.request(timeout_ms=500, cmd='preview')
         if reply and reply.get('ok'):
             h, w = reply['shape']
@@ -237,6 +269,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.status is not None:
             self.client.request(cmd='quit')
         self.timer.stop()
+        self.preview_timer.stop()
         self.client.close()
         event.accept()
 
