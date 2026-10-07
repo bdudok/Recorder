@@ -10,8 +10,12 @@ It replaces `Camera/EEG-Cam.py`.
 2. Check the hardware: close any other camera software, then
    `conda activate veeg` and `python -m VideoEEG.hw_check --cam 0`.
    This writes a report to `%USERPROFILE%\.veeg_recorder\hw_check_cam0.txt`.
-3. Make a desktop shortcut to `VideoEEG\vEEG.bat` per camera, with `--cam 0` or `--cam 1` as the argument.
-   Edit `CONDA_ROOT` in the .bat if conda is not in `%USERPROFILE%\miniforge3`.
+3. Make one desktop shortcut per camera: right-click `VideoEEG\vEEG.bat` → Show more options → Send to →
+   Desktop (create shortcut). In the shortcut's Properties, add ` --cam 0` (or ` --cam 1`) at the end of
+   Target, and rename it, e.g. "vEEG camera 0".
+   `vEEG.bat` finds the `veeg` environment by itself (in `%USERPROFILE%\.conda\envs`, Miniforge, Anaconda
+   or Miniconda); no activation or `cd` is needed. If the environment is elsewhere, add its folder to the
+   list at the top of the .bat.
 
 Windows settings for 24/7 recording:
 - Power plan: never sleep. The recorder also asks Windows to stay awake while it runs.
@@ -21,10 +25,13 @@ Windows settings for 24/7 recording:
 
 ## Use
 
-Start the shortcut. The window shows the preview, the status line, and the last messages.
-Set the exposure, folder and name, then press **Record**. Exposure, folder and name can only be
-changed while not recording.
+Double-click the shortcut for each camera (or double-click `vEEG.bat` itself, which asks for the
+camera number). Each camera gets its own window. The window shows the preview, the status line, and the
+last messages. Set the exposure, folder and name, then press **Record**. Exposure, folder and name can
+only be changed while not recording.
 
+- The preview refreshes 5 times per second. **Live view** refreshes it at the camera frame rate
+  for 1 minute, for setting up and checking the animal; press it again to stop earlier.
 - Closing the window while recording keeps the recording running in the background. Opening the
   shortcut again shows the running recording, where it can be stopped.
 - Closing the window while not recording stops the recorder.
