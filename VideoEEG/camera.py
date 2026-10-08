@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 import numpy
 
+from VideoEEG import config
+
 log = logging.getLogger(__name__)
 
 TTL_LINE = 2  # IoControl line number of GPIO0
@@ -31,6 +33,28 @@ class CameraError(Exception):
     pass
 
 
+def short_id(camera_id):
+    """Readable end of an nncam device id, which identifies the USB port, e.g. '6&351edec9&0&4'."""
+    return camera_id.rsplit('#', 1)[-1] if camera_id else ''
+
+
+def select_device(devices, index, settings):
+    """Choose the device for camera window `index` from devices [(id, name)]: the one pinned in
+    settings.camera_id, or if none is pinned yet, the first device that no other window has pinned.
+    The SDK does not list cameras that another process has open, so the list index of a camera
+    changes depending on which cameras are in use; never choose by list index."""
+    if settings.camera_id:
+        for dev in devices:
+            if dev[0] == settings.camera_id:
+                return dev
+        raise CameraError(f'camera USB {short_id(settings.camera_id)} not connected or in use')
+    claimed = {cid for i, cid in config.assigned_cameras().items() if i != index and cid}
+    free = sorted(dev for dev in devices if dev[0] not in claimed)
+    if not free:
+        raise CameraError('no unassigned camera connected')
+    return free[0]
+
+
 class NncamCamera:
     def __init__(self, index, settings):
         from Camera import nncam
@@ -43,14 +67,16 @@ class NncamCamera:
         self._io_lock = threading.Lock()
         self._ttl_idle = True  # output inverter state when no pulse is given
 
+    def list_devices(self):
+        """Connected cameras that no process has open: [(id, name)]"""
+        return [(d.id, d.displayname) for d in self.nncam.Nncam.EnumV2()]
+
     def open(self):
+        """Open this window's camera. Pins it in settings.camera_id on first use."""
         nncam = self.nncam
-        devices = nncam.Nncam.EnumV2()
-        if self.index >= len(devices):
-            raise CameraError(f'camera {self.index} not found ({len(devices)} connected)')
-        dev = devices[self.index]
+        dev_id, dev_name = select_device(self.list_devices(), self.index, self.settings)
         try:
-            cam = nncam.Nncam.Open(dev.id)
+            cam = nncam.Nncam.Open(dev_id)
         except nncam.HRESULTException as ex:
             raise CameraError(f'open failed: {ex}') from ex
         if cam is None:
@@ -71,8 +97,9 @@ class NncamCamera:
         cam.IoControl(TTL_LINE, nncam.NNCAM_IOCONTROLTYPE_SET_GPIODIR, 0x01)  # output
         cam.IoControl(TTL_LINE, nncam.NNCAM_IOCONTROLTYPE_SET_OUTPUTINVERTER, self._ttl_idle)
         self.size = cam.get_Size()  # (width, height)
-        self.info = {'model': dev.displayname, 'id': dev.id, 'fw': cam.FwVersion(),
+        self.info = {'model': dev_name, 'id': dev_id, 'fw': cam.FwVersion(),
                      'sdk': nncam.Nncam.Version(), 'size': self.size}
+        self.settings.camera_id = dev_id
         log.info('camera opened: %s', self.info)
 
     def _try_option(self, option, value):
@@ -125,7 +152,10 @@ class NncamCamera:
 
 
 class FakeCamera:
-    """Synthetic camera with the NncamCamera interface. `fail()` simulates a disconnect."""
+    """Synthetic camera with the NncamCamera interface. `fail()` simulates a disconnect.
+    Like the SDK, list_devices() does not list devices that are open."""
+    connected = ['fake#A', 'fake#B']
+    in_use = set()
 
     def __init__(self, index, settings, size=(320, 240)):
         self.index = index
@@ -138,10 +168,17 @@ class FakeCamera:
         self._stop = threading.Event()
         self._seq = 0
 
+    def list_devices(self):
+        return [(d, d) for d in self.connected if d not in self.in_use]
+
     def open(self):
         if self.open_failures > 0:
             self.open_failures -= 1
             raise CameraError('fake open failure')
+        dev_id, _ = select_device(self.list_devices(), self.index, self.settings)
+        self.in_use.add(dev_id)
+        self.settings.camera_id = dev_id
+        self.info = {'model': 'fake', 'id': dev_id, 'size': self.size}
 
     def start(self, on_frame, on_event):
         self._on_frame = on_frame
@@ -176,3 +213,4 @@ class FakeCamera:
         self._stop.set()
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join()
+        self.in_use.discard(self.info.get('id'))

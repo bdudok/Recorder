@@ -53,9 +53,6 @@ def main():
         report(f'  [{i}] {d.displayname} id={d.id} flag=0x{m.flag:x} mono={bool(m.flag & nncam.NNCAM_FLAG_MONO)} '
                f'usb3={bool(m.flag & nncam.NNCAM_FLAG_USB30)} usb3_on_usb2={bool(m.flag & nncam.NNCAM_FLAG_USB30_OVER_USB20)} '
                f'maxspeed={m.maxspeed} io={m.ioctrol} res={[(r.width, r.height) for r in m.res]}')
-    if args.cam >= len(devices):
-        report('camera index not found')
-        return
 
     cam = NncamCamera(args.cam, settings)
     cam.open()

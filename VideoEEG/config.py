@@ -2,6 +2,7 @@
 import dataclasses
 import json
 import os
+import time
 from pathlib import Path
 
 APP_DIR = Path.home() / '.veeg_recorder'
@@ -24,6 +25,7 @@ class Settings:
     ffmpeg: str = 'ffmpeg'
     min_free_gb: float = 50.0   # status shows a warning below this
     recording: bool = False     # resume recording after a restart of the recorder
+    camera_id: str = ''         # nncam device id (identifies the USB port) of this window's camera; set on first use
 
     @classmethod
     def load(cls, path):
@@ -41,11 +43,27 @@ class Settings:
         tmp = path.with_suffix('.tmp')
         with open(tmp, 'w') as f:
             json.dump(dataclasses.asdict(self), f, indent=2)
+        for attempt in range(10):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:  # Windows: another recorder is reading the file
+                time.sleep(0.05)
         os.replace(tmp, path)
 
 
 def settings_path(cam_index):
     return APP_DIR / f'cam{cam_index}_settings.json'
+
+
+def assigned_cameras():
+    """camera_id of every camera window on this PC, from the settings files: {cam_index: camera_id}"""
+    assigned = {}
+    for path in APP_DIR.glob('cam*_settings.json'):
+        index = path.name[3:-len('_settings.json')]
+        if index.isdigit():
+            assigned[int(index)] = Settings.load(path).camera_id
+    return assigned
 
 
 def heartbeat_path(cam_index):

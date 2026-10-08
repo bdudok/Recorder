@@ -30,7 +30,7 @@ from pathlib import Path
 import zmq
 
 from VideoEEG import config
-from VideoEEG.camera import CameraError, FakeCamera, NncamCamera
+from VideoEEG.camera import CameraError, FakeCamera, NncamCamera, short_id
 from VideoEEG.writer import SegmentWriter, choose_encoder
 
 log = logging.getLogger(__name__)
@@ -102,8 +102,12 @@ class Recorder:
 
     def _open_camera(self):
         self._last_open_attempt = time.time()
+        pinned = self.settings.camera_id
         try:
             self.camera.open()
+            if self.settings.camera_id != pinned:
+                self.settings.save(self.settings_file)
+                self.note(f'camera USB {short_id(self.settings.camera_id)} assigned to this window', logging.INFO)
             self.last_seq = None
             self.last_frame_time = time.time()
             self._camera_failed.clear()
@@ -214,6 +218,19 @@ class Recorder:
         if self.camera_ok:
             self.camera.set_exposure(self.settings.exposure_ms)
 
+    def set_camera(self, camera_id):
+        """Use another camera; '' picks the first one that no window has pinned."""
+        self.settings.camera_id = camera_id
+        self.settings.save(self.settings_file)
+        self._close_camera()
+        self._last_open_attempt = time.time()  # reopen after REOPEN_INTERVAL_S, so a swap partner can release it
+        self.note(f'switching to camera USB {short_id(camera_id) or "(first unassigned)"}', logging.INFO)
+
+    def cameras(self):
+        visible = self.camera.list_devices()
+        return {'self': self.settings.camera_id, 'visible': visible,
+                'assigned': {str(i): cid for i, cid in config.assigned_cameras().items()}}
+
     def status(self):
         now = time.time()
         t0, n0, fps = self._fps
@@ -225,6 +242,7 @@ class Recorder:
             free_gb = free_space_gb(self.settings.out_dir)
             self._free_gb = (now, free_gb)
         return {'cam': self.cam_index, 'camera_ok': self.camera_ok, 'camera': self.camera.info,
+                'camera_id': self.settings.camera_id,
                 'recording': self.recording, 'fps': fps, 'frames': self.frame_total,
                 'dropped_queue': self.dropped_queue, 'dropped_camera': self.dropped_camera,
                 'queue': self.frames.qsize(), 'file': self.current_file, 'pulses': self.n_pulses,
@@ -253,6 +271,11 @@ class Recorder:
             return {'ok': True}, None
         if cmd == 'stop':
             self.stop_recording()
+            return {'ok': True}, None
+        if cmd == 'cameras':
+            return self.cameras(), None
+        if cmd == 'set_camera' and not self.recording:
+            self.set_camera(request['camera_id'])
             return {'ok': True}, None
         if cmd == 'set' and not self.recording:
             if 'exposure_ms' in request:

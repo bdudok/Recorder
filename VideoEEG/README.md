@@ -30,6 +30,16 @@ camera number). Each camera gets its own window. The window shows the preview, t
 last messages. Set the exposure, folder and name, then press **Record**. Exposure, folder and name can
 only be changed while not recording.
 
+**Which camera each window records.** Each window is tied to one physical camera, identified by
+its USB port. The status line shows it as `camera USB …`. A window takes the first camera that no
+other window has claimed the first time it starts, then always opens that camera. If that camera is
+unplugged or moved to another USB port, the window shows CAMERA NOT CONNECTED and never falls back
+to another camera.
+- After first setup, or after moving cameras to different USB ports, check each window's preview.
+- If the cameras are swapped, stop recording in both windows, press **Camera...** in one window and
+  choose the camera marked with the other window's number. The two windows swap cameras.
+- If a camera was moved to another USB port, choose it in **Camera...** (it shows as "not assigned").
+
 - The preview refreshes 5 times per second. **Live view** refreshes it at the camera frame rate
   for 1 minute, for setting up and checking the animal; press it again to stop earlier.
 - Closing the window while recording keeps the recording running in the background. Opening the
@@ -68,7 +78,7 @@ The TTL pulses are 10 ms long, at random intervals of 0.5–9.5 s (mean 5 s). Th
 ## Settings and logs
 
 Folder `%USERPROFILE%\.veeg_recorder\`:
-- `cam<N>_settings.json`: settings, including ones not shown in the GUI (`framerate`, `segment_s`,
+- `cam<N>_settings.json`: settings, including the window's camera (`camera_id`) and ones not shown in the GUI (`framerate`, `segment_s`,
   `ttl_mean_interval_s`, `encoder`, `quality`, `ffmpeg`, `min_free_gb`). Edit them while the recorder is stopped.
 - `logs\cam<N>_recorder.log`, `cam<N>_supervisor.log`, `cam<N>_ffmpeg.log`: check these after any problem.
 

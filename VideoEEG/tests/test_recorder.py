@@ -183,3 +183,76 @@ def test_supervisor_restarts_killed_recorder(tmp_path):
             os.killpg(sup.pid, signal.SIGKILL)  # supervisor and recorder
         except ProcessLookupError:
             pass
+
+
+def make_cam_recorder(tmp_path, index, **settings):
+    s = config.Settings(out_dir=str(tmp_path / 'vid'), framerate=30, encoder='libx264', **settings)
+    s.save(config.settings_path(index))
+    return Recorder(index, config.settings_path(index), FakeCamera)
+
+
+def run_all(recorders, seconds):
+    t_end = time.time() + seconds
+    while time.time() < t_end:
+        for r in recorders:
+            r.check_camera()
+        time.sleep(0.05)
+
+
+def start_cameras(app_dir, order):
+    recorders = {}
+    for index in order:
+        r = Recorder(index, config.settings_path(index), FakeCamera)
+        r.start()
+        run_all([r], 0.3)  # the SDK hides cameras that are open, so start order would change list indices
+        recorders[index] = r
+    run_all(recorders.values(), 0.5)
+    return recorders
+
+
+def test_cameras_stay_pinned_across_restarts(app_dir):
+    for index in (0, 1):
+        make_cam_recorder(app_dir, index)
+    first = start_cameras(app_dir, order=(1, 0))
+    ids = {i: r.settings.camera_id for i, r in first.items()}
+    for r in first.values():
+        assert r.camera_ok
+        r.shutdown()
+    assert sorted(ids.values()) == ['fake#A', 'fake#B']
+    assert {i: config.Settings.load(config.settings_path(i)).camera_id for i in ids} == ids
+
+    second = start_cameras(app_dir, order=(0, 1))
+    assert {i: r.camera.info['id'] for i, r in second.items()} == ids
+    for r in second.values():
+        r.shutdown()
+
+
+def test_missing_pinned_camera_is_not_replaced(app_dir):
+    r = make_cam_recorder(app_dir, 0, camera_id='fake#C')
+    r.start()
+    run_all([r], 0.5)
+    assert not r.camera_ok
+    assert r.settings.camera_id == 'fake#C'
+    assert any('not connected' in m for m in r.messages)
+    r.shutdown()
+
+
+def test_swap_cameras(app_dir, monkeypatch):
+    monkeypatch.setattr(rec_mod, 'REOPEN_INTERVAL_S', 0.3)
+    make_cam_recorder(app_dir, 0, camera_id='fake#A')
+    make_cam_recorder(app_dir, 1, camera_id='fake#B')
+    recorders = start_cameras(app_dir, order=(0, 1))
+    r0, r1 = recorders[0], recorders[1]
+    reply, _ = r0.handle({'cmd': 'cameras'})
+    assert reply['self'] == 'fake#A' and reply['assigned'] == {'0': 'fake#A', '1': 'fake#B'}
+    # what the GUI of window 0 does when the camera of window 1 is chosen
+    r1.handle({'cmd': 'set_camera', 'camera_id': 'fake#A'})
+    r0.handle({'cmd': 'set_camera', 'camera_id': 'fake#B'})
+    run_all(recorders.values(), 1.5)
+    assert r0.camera_ok and r0.camera.info['id'] == 'fake#B'
+    assert r1.camera_ok and r1.camera.info['id'] == 'fake#A'
+    n = r0.frame_total
+    run_all(recorders.values(), 0.5)
+    assert r0.frame_total > n
+    for r in recorders.values():
+        r.shutdown()

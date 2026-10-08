@@ -18,6 +18,7 @@ import zmq
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from VideoEEG import config
+from VideoEEG.camera import short_id
 
 REPO = Path(__file__).resolve().parents[1]
 POLL_MS = 200       # status and normal preview refresh
@@ -89,6 +90,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.exposure_label = QtWidgets.QLabel()
         self.exposure.valueChanged.connect(lambda v: self.exposure_label.setText(f'Exposure: {v} ms'))
         self.exposure.sliderReleased.connect(self.send_exposure)
+        self.camera_button = QtWidgets.QPushButton('Camera...')
+        self.camera_button.clicked.connect(self.choose_camera)
         self.folder_button = QtWidgets.QPushButton('Select folder')
         self.folder_button.clicked.connect(self.choose_folder)
         self.folder_label = QtWidgets.QLabel()
@@ -124,6 +127,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row1.addWidget(self.live_button)
         row1.addWidget(self.rec_button)
         row2 = QtWidgets.QHBoxLayout()
+        row2.addWidget(self.camera_button)
         row2.addWidget(self.folder_button)
         row2.addWidget(self.folder_label, stretch=1)
         row2.addWidget(QtWidgets.QLabel('Name:'))
@@ -154,6 +158,43 @@ class MainWindow(QtWidgets.QMainWindow):
     # --- commands ---
     def send_exposure(self):
         self.client.request(cmd='set', exposure_ms=self.exposure.value())
+
+    def choose_camera(self):
+        """Pick this window's camera. Choosing a camera that another window uses swaps the two."""
+        reply, _ = self.client.request(cmd='cameras')
+        if reply is None:
+            return
+        mine = reply['self']
+        owner = {cid: int(k) for k, cid in reply['assigned'].items() if cid and int(k) != self.cam}
+        ids = list(dict.fromkeys(([mine] if mine else []) + [d[0] for d in reply['visible']] + list(owner)))
+        if not ids:
+            QtWidgets.QMessageBox.warning(self, 'Select camera', 'No camera found.')
+            return
+
+        def describe(cid):
+            if cid == mine:
+                return 'this window'
+            return f'camera {owner[cid]} window' if cid in owner else 'not assigned'
+        labels = [f'USB {short_id(cid)} ({describe(cid)})' for cid in ids]
+        label, ok = QtWidgets.QInputDialog.getItem(
+            self, 'Select camera', 'Camera for this window. Check the preview after changing.\n'
+            'Choosing the camera of another window swaps the two cameras.', labels,
+            ids.index(mine) if mine in ids else 0, False)
+        if not ok or ids[labels.index(label)] == mine:
+            return
+        cid = ids[labels.index(label)]
+        if cid in owner:
+            other = RecorderClient(owner[cid])
+            status, _ = other.request(cmd='status')
+            if status is None or status['recording']:
+                other.close()
+                QtWidgets.QMessageBox.warning(self, 'Select camera', f'To swap cameras, the camera {owner[cid]} '
+                                              'window must be open and not recording.')
+                return
+            other.request(cmd='set_camera', camera_id=mine)
+            other.close()
+        self.client.request(cmd='set_camera', camera_id=cid)
+        self.poll()
 
     def choose_folder(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select folder', self.folder_label.text())
@@ -225,7 +266,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def update_controls(self):
         st = self.status
         recording = bool(st and st['recording'])
-        for w in (self.exposure, self.folder_button, self.prefix):
+        for w in (self.exposure, self.camera_button, self.folder_button, self.prefix):
             w.setEnabled(st is not None and not recording)
         self.rec_button.setEnabled(st is not None)
         self.rec_button.setText('Stop' if recording else 'Record')
@@ -246,7 +287,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if low_disk:
             disk = f'<span style="color:#c62828"><b>{disk} (LOW)</b></span>'
         self.details_label.setText(
-            f'{st["fps"]:.1f} fps | frames: {st["frames"]} | dropped: {st["dropped_camera"] + st["dropped_queue"]} | '
+            f'camera USB {short_id(st["camera_id"]) or "-"} | {st["fps"]:.1f} fps | frames: {st["frames"]} | dropped: {st["dropped_camera"] + st["dropped_queue"]} | '
             f'TTL pulses: {st["pulses"]} | encoder: {st["encoder"] or "-"} | {disk}')
         self.file_label.setText(f'File: {st["file"]}' if st['file'] else '')
         text = '\n'.join(st['messages'])
