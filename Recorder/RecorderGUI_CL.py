@@ -695,4 +695,4 @@ def launch_GUI(*args, **kwargs):
 
 
 if __name__ == '__main__':
-    launch_GUI(title='Recorder', baserow_enabled=True, closedloop_host='10.18.5.124')
+    launch_GUI(title='Recorder', baserow_enabled=False, closedloop_host='10.18.5.124')
