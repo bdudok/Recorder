@@ -1,0 +1,24 @@
+# Environment for the Bruker-setup recorder apps (Recorder.RecorderGUI_CL, Camera.CamGUI_v2) and OptoTrigger.
+# VideoEEG has its own conda env (VideoEEG/environment.yml).
+# Setup: `uv sync`. Run from the repo root with LNCM-lib on the path (for BaserowAPI), e.g. in PowerShell:
+#   $env:PYTHONPATH = "..\LNCM-lib"; uv run python -m Recorder.RecorderGUI_CL
+#   uv run python -m Camera.CamGUI_v2
+[project]
+name = "recorder"
+version = "0"
+requires-python = "==3.11.*"
+dependencies = [
+    "numpy",
+    "PySide6<6.12",  # 6.12.0 crashes when a slot raises while another slot is in processEvents()
+    "opencv-python",
+    "pyzmq",
+    "pyserial",
+    "pyperclip",
+    "pywin32; sys_platform == 'win32'",  # PrairieLink COM interface
+    # for LNCM-lib's BaserowAPI
+    "pandas",
+    "requests",
+]
+
+[tool.uv]
+package = false
