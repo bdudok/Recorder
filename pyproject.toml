@@ -1,5 +1,4 @@
 # Environment for the Bruker-setup recorder apps (Recorder.RecorderGUI_CL, Camera.CamGUI_v2) and OptoTrigger.
-# VideoEEG has its own conda env (VideoEEG/environment.yml).
 # Setup: `uv sync`. Run from the repo root with LNCM-lib on the path (for BaserowAPI), e.g. in PowerShell:
 #   $env:PYTHONPATH = "..\LNCM-lib"; uv run python -m Recorder.RecorderGUI_CL
 #   uv run python -m Camera.CamGUI_v2
