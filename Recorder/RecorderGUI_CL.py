@@ -2,9 +2,9 @@
 import sys
 import os
 import time
+import traceback
 
-from pyqtgraph import Qt
-from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
+from PySide6 import QtGui, QtCore, QtWidgets
 import datetime
 import json
 import zmq
@@ -12,7 +12,7 @@ import win32com.client
 
 import pyperclip
 from BaserowAPI.BaserowRequests import GetSessions
-from Recorder.config import *
+from Recorder.config import token, user_list, stim_config_fields, stim_field_labels
 from OptoTrigger.serial_send import send_settings, configs
 
 stim_configs = configs
@@ -62,13 +62,9 @@ class GUI_main(QtWidgets.QMainWindow):
             self.db = GetSessions(token)
 
         # set up connections to each server
-        context = zmq.Context()
-        # cam connection
-        self.cam_socket = context.socket(zmq.REQ)
-        self.cam_socket.connect(f"tcp://localhost:{cam_port}")
-        # treadmill connection
-        self.trm_socket = context.socket(zmq.REQ)
-        self.trm_socket.connect(f"tcp://localhost:{treadmill_port}")
+        self.zmq_context = zmq.Context.instance()
+        self.request_timeout = 15  # seconds to wait for a reply from the cam and treadmill apps
+        self.ports = {'cam': cam_port, 'trm': treadmill_port}
         # scope connection
         if not self.debug:
             self.PrairieLink = win32com.client.Dispatch("PrairieLink64.Application")
@@ -76,12 +72,18 @@ class GUI_main(QtWidgets.QMainWindow):
         self.closedloop_port = closedloop_port
         # list of sockets to start and stop for each session
         # PrairieLink uses a different logic so will be added separately from the sockets.
-        self.sockets = {'cam': self.cam_socket, 'trm': self.trm_socket}
+        self.sockets = {sname: self.new_req_socket(f"tcp://localhost:{port}") for sname, port in self.ports.items()}
         self.start_socket_order = ('cam', 'scope', 'trm',)  # unfortunately scope has to start first with empty folder
         self.stop_socket_order = ('scope', 'trm', 'cam')  # removed session start TTL
 
         # a state variable
         self.state = 'setup'
+        self.log = None
+
+        # auto stop; a single timer so that a manual stop can cancel it
+        self.autostop_timer = QtCore.QTimer(self)
+        self.autostop_timer.setSingleShot(True)
+        self.autostop_timer.timeout.connect(self.autostop)
 
         # tabs
         self.table_widget = QtWidgets.QWidget(self)  # central widget
@@ -387,12 +389,16 @@ class GUI_main(QtWidgets.QMainWindow):
             # get file handle
             self.update_fname()
             op_dir = self.file_handle + '-000'
-            # if not os.path.exists(op_dir):
-            #     os.mkdir(op_dir)
             self.file_handle_subdir = os.path.join(op_dir, self.prefix)
+            # the scope creates the session folder when it starts (it needs an empty folder);
+            # without the scope, create it here for the camera and treadmill files
+            use_scope = self.checkboxes['scope'].isChecked()
+            if not use_scope:
+                os.makedirs(op_dir, exist_ok=True)
 
             # open log
-            self.log = logger(self.file_handle_subdir + '.log.txt')
+            self.log = logger(self.file_handle_subdir + '.log.txt',
+                              defer_until='scope running' if use_scope else None)
             print(self.file_handle_subdir + '.log.txt')
             self.log.w('Connecting sockets.')
 
@@ -401,7 +407,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 if self.PrairieLink.Connect():
                     self.PrairieLink.SendScriptCommands(f'-SetSavePath "{os.path.dirname(self.file_handle)}"')
                     self.PrairieLink.SendScriptCommands(f'-SetFileName TSeries "{self.prefix}"')
-                    self.PrairieLink.SendScriptCommands(f'-SetFileIteration TSeries 0')
+                    self.PrairieLink.SendScriptCommands('-SetFileIteration TSeries 0')
                     self.scope_response_label.setStyleSheet("background-color : green")
                     self.log.w(sname + ' connected.')
                 else:
@@ -421,7 +427,7 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.app.processEvents()
                 response = send_settings(self.stim_config_field.currentText(), settings)
                 rtext = response['message']
-                if not 'OK' in rtext:
+                if 'OK' not in rtext:
                     success = False
                     self.stim_response_label.setStyleSheet("background-color : red")
                     print('stim setup failed:', rtext)
@@ -435,12 +441,11 @@ class GUI_main(QtWidgets.QMainWindow):
             # set up camera
             sname = 'cam'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir})
+                message = {'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir}
                 self.cam_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
-                self.sockets[sname].send_json(message)
-                response = json.loads(self.sockets[sname].recv_json())
-                if not response['set']:
+                response = self.request(sname, message)
+                if response is None or not response['set']:
                     success = False
                     self.cam_response_label.setStyleSheet("background-color : red")
                     print('Cam setup failed:', response)
@@ -452,12 +457,11 @@ class GUI_main(QtWidgets.QMainWindow):
             # set up treadmill
             sname = 'trm'
             if self.checkboxes[sname].isChecked() and success:
-                message = json.dumps({'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir})
+                message = {'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir}
                 self.trm_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
-                self.sockets[sname].send_json(message)
-                response = json.loads(self.sockets[sname].recv_json())
-                if not response['set']:
+                response = self.request(sname, message)
+                if response is None or not response['set']:
                     success = False
                     self.trm_response_label.setStyleSheet("background-color : red")
                     print('Treadmill setup failed:', response)
@@ -473,15 +477,15 @@ class GUI_main(QtWidgets.QMainWindow):
             self.log.w('Recording start')
             # start all connections
             success = True
-            message = json.dumps({'go': True})
+            message = {'go': True}
             self.send_button.setText('Starting...')
             for sname in self.start_socket_order:
                 if self.checkboxes[sname].isChecked():
                     if sname not in ('scope',):
-                        socket = self.sockets[sname]
-                        socket.send_json(message)
-                        response = json.loads(socket.recv_json())
-                        go = response['go']
+                        response = self.request(sname, message)
+                        go = response is not None and response['go']
+                        if response is not None and 'log' in response:
+                            self.log.w(sname + ' responds ' + response['log'])
                     elif sname == 'scope':
                         go = self.PrairieLink.SendScriptCommands('-TSeries')
                         time.sleep(0.5)  # wait for everything else to start
@@ -491,6 +495,7 @@ class GUI_main(QtWidgets.QMainWindow):
                         success = False
                         print('Failed starting', sname)
                         self.log.w(sname + ' start failed')
+                        break  # don't start the rest, everything is stopped below
 
             self.log.dump()
             self.set_switch_state('go')
@@ -511,22 +516,23 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.db.put_new(self.sdat)
                 if self.timer_checkbox.isChecked():
                     timeout = float(self.timer_field.text())
-                    QtCore.QTimer.singleShot(int(timeout*1000*60), self.send)
+                    self.autostop_timer.start(int(timeout*1000*60))
 
             ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
 
         elif self.state == 'recording':
             # stop all connections
+            self.autostop_timer.stop()
             self.log.w('stopping')
-            message = json.dumps({'stop': True})
+            message = {'stop': True}
             for sname in self.stop_socket_order:
                 stopmsg = None
                 stopSuccess = True
                 if self.checkboxes[sname].isChecked():
                     if sname not in ('scope',):
-                        socket = self.sockets[sname]
-                        socket.send_json(message)
-                        response = json.loads(socket.recv_json())
+                        response = self.request(sname, message)
+                        if response is None:
+                            response = {'stop': False, 'log': 'no response'}
                         if 'log' in response:
                             stopmsg = response['log']
                         if not response['stop']:
@@ -561,34 +567,32 @@ class GUI_main(QtWidgets.QMainWindow):
             self.send_button.setEnabled(False)
             self.state = 'setup'
             self.send()
+            if self.state != 'set':
+                print('Setup failed, not listening for remote start.')
+                self.remote_checkbox.setChecked(False)
+                self.listen_button.setStyleSheet("background-color : grey")
+                self.send_button.setEnabled(True)
+                return
             print('Listening for remote start.')
             self.listen_button.setStyleSheet("background-color : red")
             self.app.processEvents()
             timeout = True
-            new_socket = True
-            # if there's a timeout, we keep trying until there's a response
-            # this way, if there is a request sent, it doesn't hang forever if there's any issue with the server
-            # unfortunately a REP-REQ socket hangs is a request is not responded, so this way I need to create a new socket each time
-            # consider updating this to a different pattern
-            # for correct function, try starting the server before calling this
+            response = {}
+            # Keep asking the closed loop server until it answers with a trigger. The server holds each request
+            # until its next detector iteration, then replies 'Waiting' or 'ON'. A REQ socket that got no reply
+            # can't send again, so after a timeout it is closed and replaced.
+            remote_socket = self.new_req_socket(f"tcp://{self.closedloop_host}:{self.closedloop_port}")
             while timeout and self.remote_checkbox.isChecked():
-                # closed loop remote acquisition trigger socket
-                if new_socket:
-                    context = zmq.Context()
-                    self.remote_socket = context.socket(zmq.REQ)
-                    self.remote_socket.connect(f"tcp://{self.closedloop_host}:{self.closedloop_port}")
-                    self.remote_socket.setsockopt(zmq.RCVTIMEO, 5000)
-                self.remote_socket.send_json(message)
-                try:
-                    response = json.loads(self.remote_socket.recv_json())
-                    if 'ON' in response:
-                        if response['ON']:
-                            #exit loop if stim, keep asking the server otherwise
-                            timeout = False
-                except zmq.error.Again:
-                    timeout = True
-                    new_socket = True
+                remote_socket.send_json(message)
+                if remote_socket.poll(5000) & zmq.POLLIN:
+                    response = json.loads(remote_socket.recv_json())
+                    if response.get('ON'):
+                        timeout = False  # exit loop if stim, keep asking the server otherwise
+                else:
+                    remote_socket.close()
+                    remote_socket = self.new_req_socket(f"tcp://{self.closedloop_host}:{self.closedloop_port}")
                 self.app.processEvents()
+            remote_socket.close()
             print('Message received:', response)
             if 'ON' in response and self.remote_checkbox.isChecked():
                 self.listen_button.setStyleSheet("background-color : green")
@@ -602,6 +606,38 @@ class GUI_main(QtWidgets.QMainWindow):
         self.send_button.setEnabled(True)
         self.app.processEvents()
 
+
+    def autostop(self):
+        if self.state == 'recording':
+            self.log.w('auto stop')
+            self.send()
+
+    def excepthook(self, ex_type, ex_value, ex_traceback):
+        '''Log uncaught exceptions to the session log, so they are not lost when running without a console.'''
+        tb = ''.join(traceback.format_exception(ex_type, ex_value, ex_traceback))
+        print(tb)
+        if self.log is not None:
+            self.log.w('ERROR: ' + tb)
+            self.log.dump()
+
+    def new_req_socket(self, address):
+        socket = self.zmq_context.socket(zmq.REQ)
+        socket.setsockopt(zmq.LINGER, 0)  # don't keep unsent requests when the socket is closed
+        socket.connect(address)
+        return socket
+
+    def request(self, sname, message):
+        '''Send a request to the cam or treadmill app and return the reply, or None if there is no reply within
+        request_timeout (the app isn't running or isn't armed). A REQ socket that got no reply can't send again,
+        so it is replaced. The apps expect a JSON string encoded as JSON, so the message is encoded twice.'''
+        socket = self.sockets[sname]
+        socket.send_json(json.dumps(message))
+        if socket.poll(int(self.request_timeout * 1000)) & zmq.POLLIN:
+            return json.loads(socket.recv_json())
+        print(f'No response from {sname} in {self.request_timeout} s. Is it running and armed?')
+        socket.close()
+        self.sockets[sname] = self.new_req_socket(f"tcp://localhost:{self.ports[sname]}")
+        return None
 
     def set_switch_state(self, state):
         if state == 'ready':
@@ -631,10 +667,9 @@ class logger:
         print(ts, message)
 
     def dump(self):
-        if self.defer_until is not None:
-            if self.defer_until in self.s:
-                self.f = open(self.handle, 'a')
-                self.defer_until = None
+        if self.f is None and (self.defer_until is None or self.defer_until in self.s):
+            self.f = open(self.handle, 'a')
+            self.defer_until = None
         if self.f is not None:
             self.f.write(self.s)
             self.f.flush()
@@ -645,6 +680,8 @@ class logger:
         if self.f is not None:
             self.f.write(self.s)
             self.f.close()
+            self.f = None
+            self.s = ''
 
 
 def launch_GUI(*args, **kwargs):
@@ -653,6 +690,7 @@ def launch_GUI(*args, **kwargs):
     font = QtGui.QFont()
     app.setFont(font)
     gui_main = GUI_main(app, *args, **kwargs)
+    sys.excepthook = gui_main.excepthook
     sys.exit(app.exec())
 
 
