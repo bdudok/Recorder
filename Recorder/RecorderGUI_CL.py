@@ -32,7 +32,7 @@ script_list.sort()
 class GUI_main(QtWidgets.QMainWindow):
     def __init__(self, app, cam_port=5555, treadmill_port=5556, title='Recorder',
                  baserow_enabled=True,
-                 closedloop_port=5557, closedloop_host=None):
+                 closedloop_port=5557, closedloop_host=None, wdir='E:/_Recorder'):
         super().__init__()
         self.setWindowTitle(title)
         self.app = app
@@ -43,7 +43,7 @@ class GUI_main(QtWidgets.QMainWindow):
         if self.debug:
             self.wdir = '/Users/u247640/tmp'
         else:
-            self.wdir = 'E:/_Recorder'
+            self.wdir = wdir
         self.prefix = 'Animal_DDMMYYYY_experiment_001'
         self.path = None
         self.saved_fields = ('project_field', 'animal_field', 'prefix_field', 'template_field', 'user_field', 'timer_field')

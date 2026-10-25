@@ -19,5 +19,11 @@ dependencies = [
     "requests",
 ]
 
+[dependency-groups]
+# installed by uv sync by default; run the tests with `uv run pytest`
+dev = [
+    "pytest",
+]
+
 [tool.uv]
 package = false
