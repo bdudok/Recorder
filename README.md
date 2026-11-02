@@ -40,7 +40,11 @@ cd Recorder
 uv sync
 ```
 
-Run from the repo folder (PowerShell):
+To run the apps, double-click `Recorder.bat` and `CamGUI.bat`, or make desktop shortcuts to them as described
+in the [pyControl installation](https://github.com/bdudok/PyControl/blob/pycontrol-v2.1.1/installation.md#desktop-shortcuts).
+Each one uses this repo's `.venv` and works from any folder.
+
+Or from the repo folder (PowerShell):
 
 ```
 $env:PYTHONPATH = "..\LNCM-lib"
@@ -48,8 +52,8 @@ uv run python -m Recorder.RecorderGUI_CL
 uv run python -m Camera.CamGUI
 ```
 
-In PyCharm, use `.venv\Scripts\python.exe` as the project interpreter and keep LNCM-lib as a module
-dependency of the project, which puts it on the path.
+To work on the code in PyCharm, use `.venv\Scripts\python.exe` as the project interpreter and keep LNCM-lib as
+a module dependency of the project, which puts it on the path.
 
 The pyControl GUI does not use this environment. It has its own, in `PyControl\.venv`: see
 [pyControl installation](https://github.com/bdudok/PyControl/blob/pycontrol-v2.1.1/installation.md).

@@ -80,11 +80,11 @@ uv run python pyControl_GUI.pyw
 - If Windows Firewall asks about Python, allow it on private networks. The Recorder connects on the same
   PC, so blocking it would also work.
 
-For daily use without a console window: `.venv\Scripts\pythonw.exe pyControl_GUI.pyw` from the PyControl
-folder (a desktop shortcut works with "Start in" set to the PyControl folder). Errors then go to
-`ErrorLog.txt` in that folder.
+For daily use, start all three apps from desktop shortcuts to `pyControl.bat`, `Recorder.bat` and
+`CamGUI.bat`: see "Desktop shortcuts" in PyControl's `installation.md`. pyControl's errors then go to
+`ErrorLog.txt` in the PyControl folder.
 
-## 5. PyCharm (if the apps are started from PyCharm)
+## 5. PyCharm (only if you start the apps from PyCharm instead of the shortcuts)
 
 - Recorder project: Settings → Project → Python Interpreter → Add Interpreter → Add Local Interpreter →
   Select existing → `C:\Users\User\PycharmProjects\Recorder\.venv\Scripts\python.exe`. Keep LNCM-lib as a
