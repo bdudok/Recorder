@@ -117,7 +117,6 @@ def sanitize_settings(settings):
             data['g'] = True
         else:
             data['g'] = False
-        data['g'] = int(settings['n']) #1,# number of photostimulations in each train
     data['v'] = str(settings['v'])
     return data
 
