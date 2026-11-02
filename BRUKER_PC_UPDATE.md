@@ -39,11 +39,11 @@ Close and reopen PowerShell, then check: `uv --version`. uv downloads Python 3.1
 ```
 cd C:\Users\User\PycharmProjects\Recorder
 git fetch
-git switch pycontrol-v2.1
+git switch master
+git pull
 uv sync
 ```
 
-After the branch is merged, use `git switch master` and `git pull` instead.
 `uv sync` creates `.venv` in the repo folder. Check it:
 
 ```
@@ -58,8 +58,10 @@ Recorder.
 
 ```
 cd C:\Users\User\PycharmProjects\PyControl
+git remote set-url origin https://github.com/bdudok/PyControl_LNCM.git
 git fetch
-git switch pycontrol-v2.1.1
+git switch PyControlUpdate
+git pull
 uv sync
 ```
 

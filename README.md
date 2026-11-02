@@ -15,7 +15,7 @@ The video-EEG recorder for the Pinnacle setups (VideoEEG, EEG-Cam, ClosedLoop_Pi
 - `dev_scripts/`: hardware checks for the camera, not used by the apps. See the top of each script.
 - `tests/`: pytest tests (`uv run pytest`). Scripts outside this folder should not have "test" in their names.
 
-The treadmill runs on our pyControl fork, [bdudok/PyControl](https://github.com/bdudok/PyControl).
+The treadmill runs on our pyControl fork, [bdudok/PyControl_LNCM](https://github.com/bdudok/PyControl_LNCM).
 
 ## How the apps talk
 
@@ -42,7 +42,7 @@ uv sync
 ```
 
 To run the apps, double-click `Recorder.bat` and `CamGUI.bat`, or make desktop shortcuts to them as described
-in the [pyControl installation](https://github.com/bdudok/PyControl/blob/pycontrol-v2.1.1/installation.md#desktop-shortcuts).
+in the [pyControl installation](https://github.com/bdudok/PyControl_LNCM/blob/PyControlUpdate/installation.md#desktop-shortcuts).
 Each one uses this repo's `.venv` and works from any folder.
 
 Or from the repo folder (PowerShell):
@@ -57,6 +57,6 @@ To work on the code in PyCharm, use `.venv\Scripts\python.exe` as the project in
 a module dependency of the project, which puts it on the path.
 
 The pyControl GUI does not use this environment. It has its own, in `PyControl\.venv`: see
-[pyControl installation](https://github.com/bdudok/PyControl/blob/pycontrol-v2.1.1/installation.md).
+[pyControl installation](https://github.com/bdudok/PyControl_LNCM/blob/PyControlUpdate/installation.md).
 
 Updating the Bruker PC from the old environment: [BRUKER_PC_UPDATE.md](BRUKER_PC_UPDATE.md).
