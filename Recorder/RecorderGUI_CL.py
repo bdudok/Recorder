@@ -1,8 +1,10 @@
 # GUI
+import ctypes
 import sys
 import os
 import time
 import traceback
+from pathlib import Path
 
 from PySide6 import QtGui, QtCore, QtWidgets
 import datetime
@@ -686,7 +688,10 @@ class logger:
 
 
 def launch_GUI(*args, **kwargs):
+    if sys.platform == 'win32':  # so the taskbar shows the app's icon, not Python's
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('LNCM.Recorder')
     app = QtWidgets.QApplication(sys.argv)
+    app.setWindowIcon(QtGui.QIcon(str(Path(__file__).with_name('recorder.ico'))))
     app.setStyle('Fusion')
     font = QtGui.QFont()
     app.setFont(font)

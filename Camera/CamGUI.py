@@ -1,5 +1,7 @@
 # GUI
+import ctypes
 import sys
+from pathlib import Path
 import numpy
 from PySide6 import QtGui, QtCore, QtWidgets
 from PySide6.QtCore import Qt, Signal, QTimer, QElapsedTimer
@@ -396,7 +398,10 @@ class GUI_main(QtWidgets.QMainWindow):
 
 
 def launch_GUI(*args, **kwargs):
+    if sys.platform == 'win32':  # so the taskbar shows the app's icon, not Python's
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('LNCM.CamGUI')
     app = QtWidgets.QApplication(sys.argv)
+    app.setWindowIcon(QtGui.QIcon(str(Path(__file__).with_name('camera.ico'))))
     app.setStyle('Fusion')
     font = QtGui.QFont()
     app.setFont(font)
