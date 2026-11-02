@@ -1,7 +1,7 @@
 # Updating the Bruker PC to the uv environments and pyControl 2.1.1
 
 One-time update of the Bruker acquisition PC (written 2026-10-25). It moves:
-- Recorder (RecorderGUI_CL, CamGUI_v2) to its own uv environment, with PySide6 instead of PyQt5.
+- Recorder (RecorderGUI_CL, CamGUI) to its own uv environment, with PySide6 instead of PyQt5.
 - The treadmill GUI to our pyControl fork rebased on pyControl 2.1.1, in its own uv environment.
 
 Plan about an hour, on a day without scheduled imaging. The old environment is left in place, so you can
@@ -96,13 +96,13 @@ Without PyCharm, from the Recorder folder:
 
 ```
 $env:PYTHONPATH = "..\LNCM-lib"
-uv run python -m Camera.CamGUI_v2
+uv run python -m Camera.CamGUI
 uv run python -m Recorder.RecorderGUI_CL
 ```
 
 ## 6. Test without an animal
 
-1. Start CamGUI_v2. The live preview should run; set the exposure and press Arm.
+1. Start CamGUI. The live preview should run; set the exposure and press Arm.
 2. In pyControl: connect, select the imaging task, Upload, then press Arm in "Synchronous recording". The
    label should say it is waiting for a file name.
 3. Check the valve buttons in the "Remote" box while the task runs: start the task with Start, press

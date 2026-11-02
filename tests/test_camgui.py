@@ -1,4 +1,4 @@
-"""CamGUI_v2 with a fake camera that delivers frames from its own thread, like the SDK."""
+"""CamGUI with a fake camera that delivers frames from its own thread, like the SDK."""
 import os
 import threading
 import time
@@ -8,7 +8,7 @@ import pytest
 from helpers import free_port, pump, request
 
 from Camera import nncam
-import Camera.CamGUI_v2 as C
+import Camera.CamGUI as C
 
 
 class FakeCam:

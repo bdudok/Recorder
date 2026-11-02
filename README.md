@@ -9,7 +9,7 @@ The video-EEG recorder for the Pinnacle setups (VideoEEG, EEG-Cam, ClosedLoop_Pi
 - `Recorder/RecorderGUI_CL.py`: starts and stops a synchronous recording: 2P (PrairieLink), behavior
   camera, treadmill (pyControl) and stimulator, all with the same file name. Optional remote start from
   RealTime (closed loop) on another PC.
-- `Camera/CamGUI_v2.py`: preview and recording for the externally triggered ToupCam behavior camera.
+- `Camera/CamGUI.py`: preview and recording for the externally triggered ToupCam behavior camera.
 - `OptoTrigger/Stim_StateMachine*`: Arduino sketches for the closed-loop optogenetics accessory board.
   `OptoTrigger/serial_send.py` sends stimulation settings to it (configs in that file).
 - `TestClient/`, `TestHost/`: minimal zmq examples.
@@ -24,7 +24,7 @@ the Recorder marks that device red and carries on without blocking.
 
 | App | Port | Notes |
 |---|---|---|
-| CamGUI_v2 | 5555 | arm before recording |
+| CamGUI | 5555 | arm before recording |
 | pyControl GUI | 5556 | "Synchronous recording" box; arm after uploading the task |
 | RealTime (other PC) | 5557 | remote start; `closedloop_host` in RecorderGUI_CL |
 
@@ -45,7 +45,7 @@ Run from the repo folder (PowerShell):
 ```
 $env:PYTHONPATH = "..\LNCM-lib"
 uv run python -m Recorder.RecorderGUI_CL
-uv run python -m Camera.CamGUI_v2
+uv run python -m Camera.CamGUI
 ```
 
 In PyCharm, use `.venv\Scripts\python.exe` as the project interpreter and keep LNCM-lib as a module
