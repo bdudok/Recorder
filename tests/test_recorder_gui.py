@@ -7,7 +7,9 @@ import time
 from types import SimpleNamespace
 from unittest import mock
 
+import numpy
 import pytest
+import requests
 import zmq
 from PySide6 import QtCore
 
@@ -92,6 +94,112 @@ def test_stim_config_in_baserow_follows_stimulator_checkbox(recorder, servers, m
     sdat = recorder.db.put_new.call_args.args[0]
     assert sdat.get('Stim.Config') == expected
     press(recorder)
+
+
+@pytest.fixture
+def baserow(recorder):
+    '''The Recorder with Baserow on, against a fake database with one template.'''
+    recorder.baserow_enabled = True
+    recorder.db = mock.MagicMock()
+    recorder.db.get_session.return_value = SimpleNamespace(iloc=[{'Image.ID': 'template'}])
+    recorder.db.put_new.return_value = SimpleNamespace(status_code=200)
+    recorder.checkboxes['scope'].setChecked(False)
+    return recorder.db
+
+
+def test_baserow_entry_is_saved(recorder, servers, baserow):
+    press(recorder)
+    press(recorder)
+    assert baserow.put_new.call_count == 1
+    assert recorder.baserow_label.isHidden()
+    assert not os.path.exists(recorder.file_handle_subdir + '.baserow.json')
+    press(recorder)
+
+
+def test_records_without_baserow_when_template_lookup_fails(recorder, servers, baserow, monkeypatch):
+    baserow.get_session.side_effect = requests.ConnectionError('down')
+    monkeypatch.setattr(R, 'send_settings', lambda name, settings: {'message': 'OK', 'settings': {'p': 5}})
+    recorder.checkboxes['stim'].setChecked(True)
+    press(recorder)
+    assert not recorder.baserow_label.isHidden()
+    press(recorder)
+    assert recorder.state == 'recording'
+    log = recorder.file_handle_subdir + '.log.txt'
+    press(recorder)
+    assert recorder.state == 'setup'
+    assert 'No Baserow entry' in open(log).read()
+    assert baserow.put_new.call_count == 0
+
+
+@pytest.mark.parametrize('failure', [
+    {'side_effect': requests.Timeout('slow')},
+    {'return_value': SimpleNamespace(status_code=400)},
+    {'side_effect': IndexError('bad row')},
+])
+def test_recording_continues_when_baserow_entry_fails(recorder, servers, baserow, failure):
+    baserow.put_new.configure_mock(**failure)
+    recorder.timer_checkbox.setChecked(True)
+    recorder.timer_field.setText('1')
+    press(recorder)
+    press(recorder)
+    assert recorder.state == 'recording'
+    assert recorder.autostop_timer.isActive()
+    assert not recorder.baserow_label.isHidden()
+    log = recorder.file_handle_subdir + '.log.txt'
+    press(recorder)
+    assert recorder.state == 'setup'
+    text = open(log).read()
+    assert 'No Baserow entry' in text and 'Baserow row saved to' in text
+    assert os.path.exists(recorder.file_handle_subdir + '.baserow.json')
+
+
+def test_saved_baserow_row_can_be_uploaded_later(recorder, servers, baserow):
+    if R.GetSessions is None:
+        pytest.skip('needs LNCM-lib on PYTHONPATH')
+    baserow.get_session.return_value = SimpleNamespace(iloc=[{
+        'id': numpy.int64(7), 'Image.ID': 'template', 'Mouse.ID': [{'id': numpy.int64(3), 'value': 'M1'}],
+        'Count': numpy.int64(2), 'Flag': numpy.bool_(True), 'Empty': None}])
+    baserow.put_new.side_effect = requests.ConnectionError('down')
+    press(recorder)
+    press(recorder)
+    expected = R.GetSessions(token='fake').sanitize_put(baserow.put_new.call_args.args[0])
+    with open(recorder.file_handle_subdir + '.baserow.json') as f:
+        saved = json.load(f)
+    assert R.GetSessions(token='fake').sanitize_put(saved) == expected
+    press(recorder)
+
+
+def test_recording_continues_when_backup_cannot_be_saved(recorder, servers, baserow):
+    baserow.put_new.side_effect = requests.ConnectionError('down')
+    press(recorder)
+    os.makedirs(recorder.file_handle_subdir + '.baserow.json')  # a folder in the way makes open() fail
+    press(recorder)
+    assert recorder.state == 'recording'
+    log = recorder.file_handle_subdir + '.log.txt'
+    press(recorder)
+    assert 'could not be saved' in open(log).read()
+
+
+def test_baserow_label_stays_until_next_session(recorder, servers, baserow):
+    baserow.get_session.side_effect = requests.ConnectionError('down')
+    press(recorder)
+    press(recorder)
+    baserow.get_session.side_effect = None
+    press(recorder)
+    assert not recorder.baserow_label.isHidden()  # still shown after the stop, with the server back
+    press(recorder)
+    assert recorder.baserow_label.isHidden()
+    press(recorder)
+    press(recorder)
+    assert baserow.put_new.call_count == 1
+
+
+def test_missing_template_stops_setup(recorder, servers, baserow):
+    baserow.get_session.return_value = SimpleNamespace(iloc=[])
+    with pytest.raises(IndexError):
+        press(recorder)
+    assert recorder.state == 'setup'
+    assert servers['cam'].commands() == []
 
 
 def test_start_failure_stops_everything(recorder, servers):

@@ -13,6 +13,7 @@ import zmq
 import win32com.client
 
 import pyperclip
+import requests
 from BaserowAPI.BaserowRequests import GetSessions
 from Recorder.config import token, user_list, stim_config_fields, stim_field_labels
 from OptoTrigger.serial_send import send_settings, configs
@@ -60,8 +61,11 @@ class GUI_main(QtWidgets.QMainWindow):
             self.settings_dict = {}
 
         # set up connection to Baserow database
+        # if the server can't be reached, sessions are recorded without an entry (see no_baserow_entry)
+        self.sdat = None
+        self.baserow_error = None
         if self.baserow_enabled:
-            self.db = GetSessions(token)
+            self.db = GetSessions(token, timeout=5)
 
         # set up connections to each server
         self.zmq_context = zmq.Context.instance()
@@ -271,6 +275,10 @@ class GUI_main(QtWidgets.QMainWindow):
         bottom_row_layout.addWidget(self.check_button)
         bottom_row_layout.addWidget(self.copy_button)
         bottom_row_layout.addWidget(self.fname_label)
+        self.baserow_label = QtWidgets.QLabel('No Baserow entry')
+        self.baserow_label.setStyleSheet("background-color : red")
+        self.baserow_label.hide()
+        bottom_row_layout.addWidget(self.baserow_label)
         self.tab1.layout.addLayout(horizontal_layout)
         self.tab1.layout.addLayout(bottom_row_layout)
 
@@ -371,14 +379,52 @@ class GUI_main(QtWidgets.QMainWindow):
 
         # get and populate session data
         if self.baserow_enabled:
-            sdat = dict(self.db.get_session(self.template_field.text().strip(' \r\n\t')).iloc[0])
-            sdat['User'] = self.user_field.currentText()
-            sdat['Image.ID'] = self.prefix + '-000'
-            sdat['Task'] = 'MotionCorr'
-            sdat['Date'] = self.date_field.text()
-            sdat['PupilLight'] = self.LED_field.currentText()
-            sdat.pop('Stim.Config', None)  # copied from the template; set below only if the stimulator is used
-            self.sdat = sdat
+            self.sdat = None
+            self.baserow_error = None
+            try:
+                results = self.db.get_session(self.template_field.text().strip(' \r\n\t'))
+            except (requests.RequestException, KeyError) as e:  # server unreachable or an error response
+                self.no_baserow_entry(repr(e))
+            else:
+                # a template that doesn't exist raises here and stops the setup: that is a typo, not an outage
+                sdat = dict(results.iloc[0])
+                sdat['User'] = self.user_field.currentText()
+                sdat['Image.ID'] = self.prefix + '-000'
+                sdat['Task'] = 'MotionCorr'
+                sdat['Date'] = self.date_field.text()
+                sdat['PupilLight'] = self.LED_field.currentText()
+                sdat.pop('Stim.Config', None)  # copied from the template; set below only if the stimulator is used
+                self.sdat = sdat
+
+    def no_baserow_entry(self, reason):
+        '''Recording goes on without Baserow. The label stays until the next session is set up.'''
+        self.sdat = None
+        self.baserow_error = f'No Baserow entry for this session: {reason}'
+        print(self.baserow_error)
+        self.baserow_label.show()
+
+    def put_baserow_entry(self):
+        try:
+            status = self.db.put_new(self.sdat).status_code
+        except Exception as e:  # the session is already recording, so this must not raise
+            status = repr(e)
+        if status != 200:
+            self.save_baserow_backup()
+            self.no_baserow_entry(status)
+            self.log.w(self.baserow_error)
+            self.log.dump()
+
+    def save_baserow_backup(self):
+        '''Save the row next to the session. To upload it later: GetSessions().put_new(json.load(f))'''
+        path = self.file_handle_subdir + '.baserow.json'
+        try:
+            # the row stays as read from the DB, which is what put_new expects; numpy values become plain types
+            text = json.dumps(self.sdat, indent=1, default=lambda v: v.tolist() if hasattr(v, 'tolist') else str(v))
+            with open(path, 'w') as f:
+                f.write(text)
+            self.log.w(f'Baserow row saved to {path}')
+        except Exception as e:  # the session is already recording, so this must not raise
+            self.log.w(f'Baserow row could not be saved: {e!r}')
 
     def copy_fname(self):
         pyperclip.copy(self.prefix + '-000')
@@ -390,6 +436,7 @@ class GUI_main(QtWidgets.QMainWindow):
             success = True
 
             # get file handle
+            self.baserow_label.hide()
             self.update_fname()
             op_dir = self.file_handle + '-000'
             self.file_handle_subdir = os.path.join(op_dir, self.prefix)
@@ -404,6 +451,8 @@ class GUI_main(QtWidgets.QMainWindow):
                               defer_until='scope running' if use_scope else None)
             print(self.file_handle_subdir + '.log.txt')
             self.log.w('Connecting sockets.')
+            if self.baserow_error is not None:
+                self.log.w(self.baserow_error)
 
             sname = 'scope'
             if self.checkboxes[sname].isChecked():
@@ -436,7 +485,7 @@ class GUI_main(QtWidgets.QMainWindow):
                     print('stim setup failed:', rtext)
                 else:
                     # store config in DB
-                    if self.baserow_enabled:
+                    if self.sdat is not None:
                         self.sdat['Stim.Config'] = json.dumps(response['settings'])
                     self.log.w(sname + ' responds ' + rtext)
                     self.stim_response_label.setStyleSheet("background-color : green")
@@ -514,12 +563,12 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.settings_dict[fieldname] = v
                 with open(self.settings_name, 'w') as f:
                     json.dump(self.settings_dict, f)
-                # after everything is started fine, create entry in BaseRow
-                if self.baserow_enabled:
-                    self.db.put_new(self.sdat)
                 if self.timer_checkbox.isChecked():
                     timeout = float(self.timer_field.text())
                     self.autostop_timer.start(int(timeout*1000*60))
+                # after everything is started fine, create entry in BaseRow
+                if self.sdat is not None:
+                    self.put_baserow_entry()
 
             ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
 
@@ -701,4 +750,4 @@ def launch_GUI(*args, **kwargs):
 
 
 if __name__ == '__main__':
-    launch_GUI(title='Recorder', baserow_enabled=False, closedloop_host='10.18.5.124')
+    launch_GUI(title='Recorder', closedloop_host='10.18.5.124')
