@@ -39,7 +39,7 @@ Close and reopen PowerShell, then check: `uv --version`. uv downloads Python 3.1
 ```
 cd C:\Users\User\PycharmProjects\Recorder
 git fetch
-git switch master
+git switch main
 git pull
 uv sync
 ```
@@ -60,7 +60,7 @@ Recorder.
 cd C:\Users\User\PycharmProjects\PyControl
 git remote set-url origin https://github.com/bdudok/PyControl_LNCM.git
 git fetch
-git switch PyControlUpdate
+git switch main
 git pull
 uv sync
 ```
