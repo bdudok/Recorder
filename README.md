@@ -51,4 +51,7 @@ uv run python -m Camera.CamGUI_v2
 In PyCharm, use `.venv\Scripts\python.exe` as the project interpreter and keep LNCM-lib as a module
 dependency of the project, which puts it on the path.
 
+The pyControl GUI does not use this environment. It has its own, in `PyControl\.venv`: see
+[pyControl installation](https://github.com/bdudok/PyControl/blob/pycontrol-v2.1.1/installation.md).
+
 Updating the Bruker PC from the old environment: [BRUKER_PC_UPDATE.md](BRUKER_PC_UPDATE.md).
