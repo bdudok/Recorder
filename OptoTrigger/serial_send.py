@@ -66,6 +66,15 @@ configs['shutter'] = {
 }
 
 
+configs['every_frame'] = { #1 s train with a pulse between every two frames, at 20 Hz imaging
+    'n': 20,# number of photostimulations in each train
+    'f': 20.0,# set to the imaging frame rate. a pulse has to end before the next frame: d + l + 1 < 1000/f
+    'l': 8,# duration of pulses, ms
+    'd': 33,# delay from frame start to pulse, ms. Longer than capture: linesPerFrame * scanLinePeriod. 512 lines = 32.3 ms
+    'p': 1.0, # LED power, relative of max
+    'v': 'g', #arduino script version. 'g' for Stim_StateMachine_Gating
+}
+
 configs['electrical'] = {
     'n': 1,# number of photostimulations in each train
     'f': 1,# frequency of photostimulations in each train, Hz
@@ -86,7 +95,7 @@ configs['burst'] = { #this does single pulses (baseline), then a burst, then con
 }
 
 # 'd': 0,# delay between frame start and stim start, ms #test if works with 0 or change interrupt function
-# (d not implemented for Gating version)
+# (leave out for pulses at frame start, it defaults to 0. Not implemented for Burst version)
 '''
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train
 volatile int pulseDuration = 1000; //duration of photostimulation
@@ -108,6 +117,8 @@ def sanitize_settings(settings):
         data['f'] = round(float(settings['f']), 3)  # 'f': 1,# frequency of photostimulations in each train, Hz
     if 'l' in settings:
         data['l'] = round(float(settings['l']), 1) # duration of pulses, ms
+    if 'd' in settings:
+        data['d'] = int(float(settings['d'])) # delay from frame start to pulse, ms
     if 'p' in settings:
         data['p'] = round(float(settings['p']), 2) # LED power, relative of max
     if 'b' in settings:
@@ -144,7 +155,7 @@ def send_settings(setting_name, settings, verbose=True):
                     print('Response:', incoming)
             except Exception as e:
                 print(e)
-            if 'script version mismatch' in incoming:
+            if 'Error' in incoming:
                 break
         else:
             ser = serial.Serial(serial_path, baudrate=9600, timeout=2)

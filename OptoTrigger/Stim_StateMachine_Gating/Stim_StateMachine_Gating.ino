@@ -22,7 +22,7 @@ const int maxDuration =  10; //gating this long, so don't do longer pulse
 volatile int nPulsePerTrain = 10; //number of photostimulations in each train
 volatile float pulseFrequency = 2.0; //frequency of photostimulations in each train, Hz
 volatile int pulseDuration = min(maxDuration, 8); //duration of pulses, ms
-// volatile int pulseDelay = 10; //delay from trigger to start the waveform. (ms)
+volatile int pulseDelay = 0; //delay from frame start to gating (ms). To stimulate between frames, set longer than the frame capture time
 volatile float LEDPower = 0.6; //fraction of max (0-1)
 volatile bool activateGating = true; //can be disabled for electrical stimulation
 
@@ -81,6 +81,7 @@ void loop() {
     case statePulseStart:
     //doing the full sequence in a single state using delay
     //this is to avoid the possibility of led staying on as gating wears off
+      delay(pulseDelay);
       LEDOn();
       delay(pulseDuration);
       LEDOff();
@@ -101,8 +102,14 @@ void readSerial() {
     if (doc["v"] == scriptVersion) {
       if(doc["a"] == "set") {
         setParams();
-        getParams();
-        serializeJson(doc_back, Serial);
+        //a pulse that runs into the next frame start would make the machine skip that frame
+        if (pulseDelay + pulseDuration + gateMargin < millisBetweenStim) {
+          getParams();
+          serializeJson(doc_back, Serial);
+        }
+        else {
+          Serial.println("Error, pulse does not end before the next frame");
+        }
       }
       else {
         Serial.println("Error!");
@@ -120,7 +127,7 @@ void setParams() {
   nPulsePerTrain = int(doc["n"]); 
   pulseFrequency = float(doc["f"]); 
   pulseDuration = min(maxDuration, int(doc["l"])); 
-  // pulseDelay = int(doc["d"]); 
+  pulseDelay = int(doc["d"]);
   LEDPower = float(doc["p"]);
   if (doc["g"] == false) {
     activateGating = false;
@@ -135,7 +142,7 @@ void getParams() {
   doc_back["n"] = nPulsePerTrain; 
   doc_back["f"] = pulseFrequency; 
   doc_back["l"] = pulseDuration; 
-  // doc_back["d"] = pulseDelay; 
+  doc_back["d"] = pulseDelay;
   doc_back["p"] = LEDPower;
   doc_back["g"] = activateGating;
   doc_back["OK"] = true;
