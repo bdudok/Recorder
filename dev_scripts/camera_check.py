@@ -1,3 +1,7 @@
+'''
+Hardware check, not used by the apps. Lists the camera's model and resolutions, and pulls frames until ENTER.
+Close CamGUI first. Run from the repo root: python -m dev_scripts.camera_check
+'''
 from Camera import nncam
 class App:
     def __init__(self):

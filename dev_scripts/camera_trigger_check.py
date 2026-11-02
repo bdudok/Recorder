@@ -1,4 +1,8 @@
-
+'''
+Hardware check, not used by the apps. Sets the camera to external trigger on GPIO0 and exits after 10 frames, so it
+keeps waiting if the trigger signal doesn't arrive. Close CamGUI first.
+Run from the repo root: python -m dev_scripts.camera_trigger_check
+'''
 from Camera import nncam
 class App:
     def __init__(self):
