@@ -100,8 +100,8 @@ void loop() {
     case stateLedOff:
       if (timeElapsed > timeLimit) {
           LEDOff();
+          nPulses ++;
           if (nPulses < nPulsePerTrain) {
-            nPulses ++;
             state = stateWaitFrame;
           }
           else {
