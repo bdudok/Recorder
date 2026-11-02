@@ -4,6 +4,8 @@ import os
 import sys
 import threading
 import time
+from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 import zmq
@@ -73,6 +75,23 @@ def test_session_without_scope(recorder, servers, app):
     assert 'cam running' in text and 'trm running' in text and 'end of log' in text
     for server in servers.values():
         assert server.commands() == ['set', 'go', 'stop']
+
+
+@pytest.mark.parametrize('stim_checked, expected', [(False, None), (True, '{"p": 5}')])
+def test_stim_config_in_baserow_follows_stimulator_checkbox(recorder, servers, monkeypatch, stim_checked, expected):
+    template = {'Image.ID': 'template', 'Stim.Config': '{"p": 99}'}
+    recorder.baserow_enabled = True
+    recorder.db = mock.MagicMock()
+    recorder.db.get_session.return_value = SimpleNamespace(iloc=[template])
+    monkeypatch.setattr(R, 'send_settings', lambda name, settings: {'message': 'OK', 'settings': {'p': 5}})
+    recorder.checkboxes['scope'].setChecked(False)
+    recorder.checkboxes['stim'].setChecked(stim_checked)
+    press(recorder)
+    press(recorder)
+    assert recorder.state == 'recording'
+    sdat = recorder.db.put_new.call_args.args[0]
+    assert sdat.get('Stim.Config') == expected
+    press(recorder)
 
 
 def test_start_failure_stops_everything(recorder, servers):

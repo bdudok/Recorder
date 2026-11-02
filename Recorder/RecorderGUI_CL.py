@@ -375,6 +375,7 @@ class GUI_main(QtWidgets.QMainWindow):
             sdat['Task'] = 'MotionCorr'
             sdat['Date'] = self.date_field.text()
             sdat['PupilLight'] = self.LED_field.currentText()
+            sdat.pop('Stim.Config', None)  # copied from the template; set below only if the stimulator is used
             self.sdat = sdat
 
     def copy_fname(self):
