@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmap, QImage
 from Camera import nncam
 import cv2
 
-
+import datetime
 import json
 import traceback
 import zmq
@@ -18,12 +18,33 @@ import zmq
 For behavior cam on 2P
 App for displaying camera preview, setting exposure time, and saving stream during recording
 Acquisition start controlled by the recorder client (RecorderGUI)
+Runs without a console: errors are shown over the image and added to ERROR_LOG.
 '''
+ERROR_LOG = Path(__file__).with_name('ErrorLog.txt')
+
+
+def log_error(text):
+    try:
+        with open(ERROR_LOG, 'a') as f:
+            f.write(f'{datetime.datetime.now().isoformat(timespec="seconds")} {text}\n')
+    except OSError:
+        pass  # the error is still shown in the window
+
+
 #in this implementation, zmq poll runs in method of App. ideally, it would generate qt events
 class GUI_main(QtWidgets.QMainWindow):
     # frames arrive on the camera SDK's thread; widgets are only updated on the GUI thread, through these signals
     frame_ready = Signal(QImage)
     fps_text = Signal(str)
+    error_text = Signal(str)  # errors on the camera SDK's thread go to show_error through this signal
+    camera_errors = {
+        nncam.NNCAM_EVENT_ERROR: 'Camera error',
+        nncam.NNCAM_EVENT_DISCONNECTED: 'Camera disconnected',
+        nncam.NNCAM_EVENT_TRIGGERFAIL: 'Camera trigger failed',
+        nncam.NNCAM_EVENT_NOFRAMETIMEOUT: 'Camera timeout: no frame',
+        nncam.NNCAM_EVENT_NOPACKETTIMEOUT: 'Camera timeout: no data',
+    }
+    max_error_lines = 5
 
     def __init__(self, app, port=5555, title='Cam'):
         super().__init__()
@@ -50,6 +71,8 @@ class GUI_main(QtWidgets.QMainWindow):
 
         #open camera
         a = nncam.Nncam.EnumV2()
+        if not a:
+            raise RuntimeError('No camera found. Check the USB cable, and that no other app is using the camera.')
         self.cam = False
         self.camID = a[0].id
 
@@ -127,6 +150,19 @@ class GUI_main(QtWidgets.QMainWindow):
         self.frame_ready.connect(self.show_frame)
         self.fps_text.connect(self.lbl_frame.setText)
 
+        # a label on top of the image: drawing into the frames wouldn't show anything if the frames stop
+        self.error_lines = []  # [message, count]
+        self.error_label = QtWidgets.QLabel()
+        self.error_label.setStyleSheet('background-color : rgba(180, 0, 0, 210); color : white; font-weight : bold; '
+                                       'padding : 6px')
+        self.error_label.setWordWrap(True)
+        self.error_label.setToolTip('Click to dismiss')
+        self.error_label.mousePressEvent = lambda event: self.clear_errors()
+        self.error_label.hide()
+        video_layout = QtWidgets.QVBoxLayout(self.lbl_video)
+        video_layout.addWidget(self.error_label, alignment=Qt.AlignmentFlag.AlignTop)
+        self.error_text.connect(self.show_error)
+
         self.setCentralWidget(centralwidget)
         grid_layout.addLayout(horizontal_layout, 0, 0, 1, 8)
         grid_layout.addWidget(self.lbl_video, 1, 0, 8, 10)
@@ -136,6 +172,30 @@ class GUI_main(QtWidgets.QMainWindow):
         self.set_switch_state('arm')
         self.start_cam_live()
         self.show()
+
+    def closeEvent(self, event):
+        # close the socket before the app exits: with no console, a process stuck in cleanup can't be seen or closed,
+        # and it would keep the camera and the port
+        self.stop_cam()
+        self.server.close(linger=0)
+        super().closeEvent(event)
+
+    def show_error(self, message, details=None):
+        '''Show an error over the image until the next session or a click. Repeats are counted on one line.'''
+        if self.error_lines and self.error_lines[-1][0] == message:
+            self.error_lines[-1][1] += 1
+        else:
+            self.error_lines = (self.error_lines + [[message, 1]])[-self.max_error_lines:]
+            log_error(details or message)
+        self.error_label.setText('\n'.join(m if n == 1 else f'{m} (x{n})' for m, n in self.error_lines))
+        self.error_label.show()
+
+    def clear_errors(self):
+        self.error_lines = []
+        self.error_label.hide()
+
+    def excepthook(self, ex_type, ex_value, ex_traceback):
+        self.show_error(f'Error: {ex_value!r}', ''.join(traceback.format_exception(ex_type, ex_value, ex_traceback)))
 
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
@@ -187,8 +247,6 @@ class GUI_main(QtWidgets.QMainWindow):
         is_color = self.format in ('24rgb',)
         shape = (self.sz[0], self.sz[1])
         self.outfile = cv2.VideoWriter(self.outfile_handle, self.fourcc, self.framerate, shape, is_color)
-
-        print('Saving file:', self.outfile_handle)
         self.frame_counter = 0
         self.has_writer = True
 
@@ -235,9 +293,11 @@ class GUI_main(QtWidgets.QMainWindow):
                 self.preview_update()
                 # print('pull image ok')#, total = {}'.format(self.total))
             except nncam.HRESULTException as ex:
-                print('pull image failed, hr=0x{:x}'.format(ex.hr & 0xffffffff))
-        else:
-            print('event callback: {}'.format(nEvent))
+                self.error_text.emit('Frame lost: pull image failed, hr=0x{:x}'.format(ex.hr & 0xffffffff))
+            except Exception as e:  # raised on the SDK's thread, it would not reach the excepthook
+                self.error_text.emit(f'Frame error: {e!r}')
+        elif nEvent in self.camera_errors:
+            self.error_text.emit(self.camera_errors[nEvent])
 
     def update_fps(self):
         if self.cam:
@@ -365,9 +425,9 @@ class GUI_main(QtWidgets.QMainWindow):
             command = None
             try:
                 request = json.loads(request)
-                print(request)
                 command = next((c for c in ('set', 'go', 'stop') if c in request), None)
                 if command == 'set':
+                    self.clear_errors()
                     self.set_prefix(request['prefix'])
                     self.frame_counter = 0
                     self.outfile_handle = request['handle'] + self.file_ext
@@ -392,7 +452,7 @@ class GUI_main(QtWidgets.QMainWindow):
                     message = {'log': f'cam: unknown request {request}'}
             except Exception as e:
                 # reply anyway, so the Recorder gets the error instead of a timeout
-                traceback.print_exc()
+                self.show_error(f"'{command}' failed: {e!r}", traceback.format_exc())
                 message = {command: False, 'log': f'cam error: {e!r}'}
             self.server.send_json(json.dumps(message))
 
@@ -405,7 +465,13 @@ def launch_GUI(*args, **kwargs):
     app.setStyle('Fusion')
     font = QtGui.QFont()
     app.setFont(font)
-    gui_main = GUI_main(app, *args, **kwargs)  # noqa: F841 - the reference keeps the window alive
+    try:
+        gui_main = GUI_main(app, *args, **kwargs)
+    except Exception as e:  # there is no image to show this over, and no console
+        log_error(traceback.format_exc())
+        QtWidgets.QMessageBox.critical(None, 'Camera', f'The camera app could not start:\n\n{e}')
+        sys.exit(1)
+    sys.excepthook = gui_main.excepthook
     sys.exit(app.exec())
 
 if __name__ == '__main__':

@@ -2,6 +2,7 @@
 import os
 import threading
 import time
+from unittest import mock
 
 import pytest
 
@@ -54,7 +55,7 @@ def open_fake(cam_id):
 
 
 @pytest.fixture
-def camgui(app, monkeypatch):
+def camgui(app, monkeypatch, tmp_path):
     monkeypatch.setattr(nncam.Nncam, 'EnumV2', staticmethod(lambda: [type('Device', (), {'id': 'fake'})()]))
     monkeypatch.setattr(nncam.Nncam, 'Open', staticmethod(open_fake))
     FakeCam.fail_open = False
@@ -65,6 +66,7 @@ def camgui(app, monkeypatch):
         shown_on.add(threading.current_thread() is threading.main_thread())
         show_frame(self, image)
     monkeypatch.setattr(C.GUI_main, 'show_frame', recording_show_frame)
+    monkeypatch.setattr(C, 'ERROR_LOG', tmp_path / 'ErrorLog.txt')
     port = free_port()
     gui = C.GUI_main(app, port=port)
     gui.port_for_test = port
@@ -109,6 +111,101 @@ def test_replies_when_camera_fails(camgui, app, tmp_path):
     assert reply['go'] is False and 'cam error' in reply['log']
     # the socket still works after the error
     assert request(app, port, {'hello': True}) == {'log': "cam: unknown request {'hello': True}"}
+
+
+def from_sdk_thread(function, *args):
+    thread = threading.Thread(target=function, args=args)
+    thread.start()
+    thread.join()
+
+
+def test_camera_event_is_shown_over_the_image(camgui, app):
+    from_sdk_thread(camgui.CameraCallback, nncam.NNCAM_EVENT_DISCONNECTED)
+    pump(app, 0.1)
+    assert not camgui.error_label.isHidden()
+    assert camgui.error_label.parent() is camgui.lbl_video
+    assert camgui.error_label.text() == 'Camera disconnected'
+    assert 'Camera disconnected' in C.ERROR_LOG.read_text()
+
+
+def test_routine_camera_events_are_not_errors(camgui, app):
+    from_sdk_thread(camgui.CameraCallback, nncam.NNCAM_EVENT_EXPOSURE)
+    pump(app, 0.1)
+    assert camgui.error_label.isHidden()
+
+
+def test_repeated_error_is_counted_on_one_line(camgui, app):
+    for _ in range(3):
+        from_sdk_thread(camgui.CameraCallback, nncam.NNCAM_EVENT_TRIGGERFAIL)
+    pump(app, 0.1)
+    assert camgui.error_label.text() == 'Camera trigger failed (x3)'
+    assert C.ERROR_LOG.read_text().count('Camera trigger failed') == 1
+
+
+def test_only_the_latest_errors_are_shown(camgui):
+    for i in range(camgui.max_error_lines + 3):
+        camgui.show_error(f'error {i}')
+    assert camgui.error_label.text().count('\n') == camgui.max_error_lines - 1
+    assert 'error 0' not in camgui.error_label.text()
+
+
+def test_exception_on_sdk_thread_is_shown(camgui, app, monkeypatch):
+    def fail():
+        raise OSError('disk full')
+    camgui.stop_cam()
+    monkeypatch.setattr(camgui, 'preview_update', fail)
+    from_sdk_thread(camgui.CameraCallback, nncam.NNCAM_EVENT_IMAGE)
+    pump(app, 0.1)
+    assert 'disk full' in camgui.error_label.text()
+
+
+def test_error_stays_through_stop_and_clears_at_next_session(camgui, app, tmp_path):
+    arm(camgui)
+    port = camgui.port_for_test
+    assert request(app, port, {'set': True, 'prefix': 'A_001', 'handle': str(tmp_path / 'A_001')})['set']
+    assert request(app, port, {'go': True})['go']
+    from_sdk_thread(camgui.CameraCallback, nncam.NNCAM_EVENT_ERROR)
+    pump(app, 0.3)
+    assert request(app, port, {'stop': True})['stop']
+    assert not camgui.error_label.isHidden()
+    assert request(app, port, {'set': True, 'prefix': 'A_002', 'handle': str(tmp_path / 'A_002')})['set']
+    assert camgui.error_label.isHidden()
+
+
+def test_click_dismisses_error(camgui):
+    camgui.show_error('some error')
+    camgui.error_label.mousePressEvent(None)
+    assert camgui.error_label.isHidden()
+
+
+def test_failed_request_is_shown(camgui, app, tmp_path):
+    arm(camgui)
+    port = camgui.port_for_test
+    assert request(app, port, {'set': True, 'prefix': 'A_001', 'handle': str(tmp_path / 'A_001')})['set']
+    FakeCam.fail_open = True
+    request(app, port, {'go': True})
+    assert "'go' failed" in camgui.error_label.text()
+    assert 'Traceback' in C.ERROR_LOG.read_text()
+
+
+def test_uncaught_exception_is_shown(camgui):
+    try:
+        raise ValueError('bad slot')
+    except ValueError as e:
+        camgui.excepthook(ValueError, e, e.__traceback__)
+    assert 'bad slot' in camgui.error_label.text()
+
+
+def test_no_camera_gives_message_box_and_log(app, monkeypatch, tmp_path):
+    monkeypatch.setattr(C, 'ERROR_LOG', tmp_path / 'ErrorLog.txt')
+    monkeypatch.setattr(nncam.Nncam, 'EnumV2', staticmethod(lambda: []))
+    monkeypatch.setattr(C.QtWidgets, 'QApplication', lambda argv: app)
+    box = mock.MagicMock()
+    monkeypatch.setattr(C.QtWidgets.QMessageBox, 'critical', box)
+    with pytest.raises(SystemExit):
+        C.launch_GUI(port=free_port())
+    assert 'No camera found' in box.call_args.args[2]
+    assert 'No camera found' in C.ERROR_LOG.read_text()
 
 
 def test_waiting_label_is_cleared_when_disarmed(camgui, app):
