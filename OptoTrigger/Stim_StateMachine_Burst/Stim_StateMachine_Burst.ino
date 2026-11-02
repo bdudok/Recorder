@@ -12,6 +12,7 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 //define constants
 const String scriptVersion = "b";
 const int gateMargin = 1; //milliseconds
+const int frameTolerance = 5; //a frame this much earlier than the pulse period still gets a pulse (ms)
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 // note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
@@ -190,7 +191,7 @@ void trigTrain() {
 
 void trigFrame() {
   if (state == stateWaitFrame) {
-    if (nPulses == 0 || timeElapsed > millisBetweenStim) {
+    if (nPulses == 0 || timeElapsed > millisBetweenStim - frameTolerance) {
       timeElapsed = 0;
       // timeLimit = 0;
       if ((nCompletedBl < nBaselinePulses) || (nCompletedBurst > 0)) {

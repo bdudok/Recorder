@@ -12,6 +12,7 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 //define constants
 const String scriptVersion = "g";
 const int gateMargin = 1; //milliseconds
+const int frameTolerance = 5; //a frame this much earlier than the pulse period still gets a pulse (ms)
 // const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 // const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 
@@ -161,7 +162,7 @@ void trigTrain() {
 
 void trigFrame() {
   if (state == stateWaitFrame) {
-    if (nPulses == 0 || timeElapsed > millisBetweenStim) {
+    if (nPulses == 0 || timeElapsed > millisBetweenStim - frameTolerance) {
       timeElapsed = 0;
       // timeLimit = 0;
       state = statePulseStart;
