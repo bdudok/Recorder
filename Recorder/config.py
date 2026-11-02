@@ -1,4 +1,4 @@
-from Recorder.token import token
+from Recorder.token import token  # noqa: F401
 
 user_list = (
     'Recorder',

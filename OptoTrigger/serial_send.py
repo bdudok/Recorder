@@ -1,7 +1,6 @@
 import time
 import json
 import serial
-import pprint
 from Recorder.config import serial_path
 
 '''
