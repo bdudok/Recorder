@@ -155,8 +155,8 @@ void getParams() {
 
 void resetCounters() {
 // called by serial, so that counters can be reset between recordings
-    volatile int nCompletedBl = 0;
-    volatile int nCompletedBurst = 0;
+    nCompletedBl = 0;
+    nCompletedBurst = 0;
 }
 
 //output functions
