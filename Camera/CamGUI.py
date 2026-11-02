@@ -200,7 +200,7 @@ class GUI_main(QtWidgets.QMainWindow):
     def set_exptime(self, ms=8):
         self.cam.put_ExpoTime(int(ms * 1000))
 
-    def set_delay(self, ms=35):
+    def set_delay(self, ms):
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERDELAY , int(ms * 1000))  # gpio0 = 0x01
 
     def open_cam(self, maxspeed=False):
@@ -393,7 +393,7 @@ class GUI_main(QtWidgets.QMainWindow):
         self.cam.put_Option(nncam.NNCAM_OPTION_TRIGGER, 2)
         self.exposure_update()
         self.cam.IoControl(0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE, 0x01) #gpio0 = 0x01
-        self.set_delay()
+        self.set_delay(self.delay_time)
         self.cam.StartPullModeWithCallback(self.cameraCallback, self)
 
 

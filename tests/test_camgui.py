@@ -102,6 +102,20 @@ def test_set_go_stop_writes_video_and_timestamps(camgui, app, tmp_path):
     assert camgui.shown_on == {True}
 
 
+def test_recording_uses_the_delay_slider(camgui, app, tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(FakeCam, 'IoControl', lambda self, *args: calls.append(args), raising=False)
+    camgui.delay_setting.setValue(20)
+    arm(camgui)
+    port = camgui.port_for_test
+    assert request(app, port, {'set': True, 'prefix': 'A_001', 'handle': str(tmp_path / 'A_001')})['set']
+    calls.clear()
+    assert request(app, port, {'go': True}) == {'go': True}
+    assert calls[-1] == (0, nncam.NNCAM_IOCONTROLTYPE_SET_TRIGGERDELAY, 20000)
+    assert request(app, port, {'stop': True})['stop']
+    pump(app, 2.5)  # the writer is released 2 s after stop
+
+
 def test_replies_when_camera_fails(camgui, app, tmp_path):
     arm(camgui)
     port = camgui.port_for_test
