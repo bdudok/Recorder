@@ -298,6 +298,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.exposure_setting.setEnabled(True)
             self.live_toggle.setCheckable(True)
             self.limit_box.setEnabled(True)
+            self.filename_label.setText('Set exposure then arm.')
             self.timer.stop()
 
     def live(self):

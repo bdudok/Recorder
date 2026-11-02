@@ -111,5 +111,13 @@ def test_replies_when_camera_fails(camgui, app, tmp_path):
     assert request(app, port, {'hello': True}) == {'log': "cam: unknown request {'hello': True}"}
 
 
+def test_waiting_label_is_cleared_when_disarmed(camgui, app):
+    arm(camgui)
+    assert camgui.filename_label.text() == 'Waiting for recorder'
+    camgui.arm_toggle.setChecked(False)
+    camgui.arm()
+    assert camgui.filename_label.text() == 'Set exposure then arm.'
+
+
 def test_no_reply_when_not_armed(camgui, app):
     assert request(app, camgui.port_for_test, {'set': True}, timeout=1.5) is None
