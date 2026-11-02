@@ -509,7 +509,8 @@ class GUI_main(QtWidgets.QMainWindow):
             # set up treadmill
             sname = 'trm'
             if self.checkboxes[sname].isChecked() and success:
-                message = {'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir}
+                message = {'set': True, 'prefix': self.prefix, 'handle': self.file_handle_subdir,
+                           'houselight': self.LED_field.currentText() == 'ON'}
                 self.trm_response_label.setStyleSheet("background-color : lightred")
                 self.app.processEvents()
                 response = self.request(sname, message)

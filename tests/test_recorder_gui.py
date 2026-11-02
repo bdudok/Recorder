@@ -202,6 +202,15 @@ def test_missing_template_stops_setup(recorder, servers, baserow):
     assert servers['cam'].commands() == []
 
 
+@pytest.mark.parametrize('setting, expected', [('ON', True), ('OFF', False)])
+def test_pupil_light_setting_is_sent_to_treadmill(recorder, servers, setting, expected):
+    recorder.checkboxes['scope'].setChecked(False)
+    recorder.LED_field.setCurrentText(setting)
+    press(recorder)
+    assert servers['trm'].requests[0]['houselight'] is expected
+    assert 'houselight' not in servers['cam'].requests[0]
+
+
 def test_start_failure_stops_everything(recorder, servers):
     recorder.checkboxes['scope'].setChecked(False)
     servers['trm'].reply = lambda request: {'go': False, 'log': 'no'} if 'go' in request else {
