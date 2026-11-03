@@ -150,7 +150,7 @@ def send_settings(setting_name, settings, verbose=True):
             ser.write(bytes(message, "utf-8"), )
             ser.flush()
             try:
-                incoming = ser.readline().decode("utf-8")
+                incoming = ser.readline().decode("utf-8").strip()
                 if verbose:
                     print('Response:', incoming)
             except Exception as e:

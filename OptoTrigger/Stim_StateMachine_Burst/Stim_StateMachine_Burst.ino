@@ -113,6 +113,7 @@ void readSerial() {
         setParams();
         getParams();
         serializeJson(doc_back, Serial);
+        Serial.println(); //the newline ends the reply, so readline doesn't wait for its timeout
       }
       else {
         Serial.println("Error!");

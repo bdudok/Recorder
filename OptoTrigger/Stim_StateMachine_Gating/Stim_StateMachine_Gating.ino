@@ -106,6 +106,7 @@ void readSerial() {
         if (pulseDelay + pulseDuration + gateMargin < millisBetweenStim) {
           getParams();
           serializeJson(doc_back, Serial);
+          Serial.println(); //the newline ends the reply, so readline doesn't wait for its timeout
         }
         else {
           Serial.println("Error, pulse does not end before the next frame");
