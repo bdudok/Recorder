@@ -12,7 +12,7 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 //define constants
 const String scriptVersion = "s";
 const int frameTolerance = 5; //a frame this much earlier than the pulse period still gets a pulse (ms)
-const int frameTimeout = 1000; //end the train if no frame comes for this long (ms)
+const int frameTimeout = 1000; //end the train if no frame comes for this long after the train start or a frame (ms)
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 // note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
@@ -68,12 +68,12 @@ void loop() {
       readSerial();
       break;
     case stateWaitFrame:
-      //if frames stop in a train, end it, so the rest does not fire in the next recording
+      //if frames don't come or stop in a train, end it, so the rest does not fire in the next recording
       if (frameSeen) {
         frameSeen = false;
         sinceFrame = 0;
       }
-      else if (nPulses > 0 && sinceFrame > frameTimeout) {
+      else if (sinceFrame > frameTimeout) {
         state = stateIdle;
       }
       break;
@@ -172,6 +172,7 @@ void LEDOff() {
 //interrupt functions
 void trigTrain() {
   if (state == stateIdle){
+    frameSeen = true; //starts the frame timeout from the train start
     nPulses = 0;
     state = stateWaitFrame;
   }

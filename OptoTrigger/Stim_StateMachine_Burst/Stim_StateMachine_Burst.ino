@@ -13,6 +13,7 @@ const byte outputPinLED = 12; //PWM output to drigger LED
 const String scriptVersion = "b";
 const int gateMargin = 1; //milliseconds
 const int frameTolerance = 5; //a frame this much earlier than the pulse period still gets a pulse (ms)
+const int frameTimeout = 1000; //end the train if no frame comes for this long after the train start (ms)
 const int shutterDelayOpen = 22; //early command to start opening shutter (ms)
 const int shutterDelayClose = 6; //early command to start closing shutter (ms)
 // note that shutter only closes if input control 1 is high, ie. the acquisition is running with open main shutter,
@@ -35,6 +36,8 @@ volatile int nCompletedBl = 0;
 volatile int nCompletedBurst = 0;
 volatile float millisBetweenStim = 1000 / pulseFrequency;
 elapsedMillis timeElapsed;
+volatile bool frameSeen = false; //set on each frame start
+elapsedMillis sinceFrame; //only used in loop, to avoid reading it during an interrupt
 
 
 //define state machine variables
@@ -73,6 +76,14 @@ void loop() {
       readSerial();
       break;
     case stateWaitFrame:
+      //if frames don't come after the train start, end it, so it does not fire in the next recording
+      if (frameSeen) {
+        frameSeen = false;
+        sinceFrame = 0;
+      }
+      else if (sinceFrame > frameTimeout) {
+        state = stateIdle;
+      }
       break;
     case statePulseStart:
     //doing the full sequence in a single state using delay
@@ -185,12 +196,14 @@ void LEDOff() {
 //interrupt functions
 void trigTrain() {
   if (state == stateIdle){
+    frameSeen = true; //starts the frame timeout from the train start
     nPulses = 0;
     state = stateWaitFrame;
   }
 }
 
 void trigFrame() {
+  frameSeen = true;
   if (state == stateWaitFrame) {
     if (nPulses == 0 || timeElapsed > millisBetweenStim - frameTolerance) {
       timeElapsed = 0;
