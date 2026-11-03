@@ -27,7 +27,7 @@ volatile int pulseDuration = min(maxDuration, 8); //duration of pulses, ms
 volatile float LEDPower = 0.6; //fraction of max (0-1)
 volatile bool activateGating = true; //can be disabled for electrical stimulation
 volatile int nBaselinePulses = 10;
-volatile int burstDuration = 2000; //duration of burst, ms
+volatile int burstDuration = 2000; //duration of burst, ms. int overflows at 32.767 s, so keep bursts shorter
 
 //define task varaibles
 volatile int nPulses = 0;
