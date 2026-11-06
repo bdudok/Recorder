@@ -293,3 +293,27 @@ def test_remote_start(recorder, app):
     assert recorder.state == 'recording'
     recorder.remote_checkbox.setChecked(False)
     press(recorder)
+
+
+def test_stops_when_scope_finishes(recorder, servers, prairie_link, app):
+    def script(command):
+        if command == '-TSeries':
+            os.makedirs(recorder.scope_xml.parent)  # Prairie View creates the session folder
+        return True
+    prairie_link.SendScriptCommands.side_effect = script
+    recorder.scope_check_timer.setInterval(100)
+    press(recorder)
+    press(recorder)
+    assert recorder.state == 'recording'
+    log = recorder.file_handle_subdir + '.log.txt'
+    recorder.scope_xml.write_text('<PVScan>\n  <Sequence>\n')  # still acquiring
+    pump(app, 0.3)
+    assert recorder.state == 'recording'
+    recorder.scope_xml.write_text('<PVScan>\n  <Sequence>\n  </Sequence>\n</PVScan>\n')
+    pump(app, 0.3)
+    assert recorder.state == 'setup'
+    assert not recorder.scope_check_timer.isActive()
+    assert 'scope stopped' in open(log).read()
+    prairie_link.SendScriptCommands.assert_any_call('-Abort')
+    for server in servers.values():
+        assert server.commands() == ['set', 'go', 'stop']

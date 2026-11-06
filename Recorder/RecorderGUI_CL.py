@@ -90,6 +90,10 @@ class GUI_main(QtWidgets.QMainWindow):
         self.autostop_timer = QtCore.QTimer(self)
         self.autostop_timer.setSingleShot(True)
         self.autostop_timer.timeout.connect(self.autostop)
+        # stops the session when the T-series ends on the scope (frame limit, or stopped in Prairie View)
+        self.scope_check_timer = QtCore.QTimer(self)
+        self.scope_check_timer.setInterval(5000)
+        self.scope_check_timer.timeout.connect(self.check_scope)
 
         # tabs
         self.table_widget = QtWidgets.QWidget(self)  # central widget
@@ -440,6 +444,7 @@ class GUI_main(QtWidgets.QMainWindow):
             self.update_fname()
             op_dir = self.file_handle + '-000'
             self.file_handle_subdir = os.path.join(op_dir, self.prefix)
+            self.scope_xml = Path(op_dir) / (Path(op_dir).name + '.xml')
             # the scope creates the session folder when it starts (it needs an empty folder);
             # without the scope, create it here for the camera and treadmill files
             use_scope = self.checkboxes['scope'].isChecked()
@@ -567,15 +572,18 @@ class GUI_main(QtWidgets.QMainWindow):
                 if self.timer_checkbox.isChecked():
                     timeout = float(self.timer_field.text())
                     self.autostop_timer.start(int(timeout*1000*60))
+                if self.checkboxes['scope'].isChecked():
+                    self.scope_check_timer.start()
                 # after everything is started fine, create entry in BaseRow
                 if self.sdat is not None:
                     self.put_baserow_entry()
 
-            ##TODO: check every 5 seconds if the scope and treadmill are still running and stop acquisition if not.
+            ##TODO: stop acquisition if the treadmill task ends (for tasks with a set duration).
 
         elif self.state == 'recording':
             # stop all connections
             self.autostop_timer.stop()
+            self.scope_check_timer.stop()
             self.log.w('stopping')
             message = {'stop': True}
             for sname in self.stop_socket_order:
@@ -665,6 +673,11 @@ class GUI_main(QtWidgets.QMainWindow):
             self.log.w('auto stop')
             self.send()
 
+    def check_scope(self):
+        if self.state == 'recording' and scope_finished(self.scope_xml):
+            self.log.w('scope stopped')
+            self.send()
+
     def excepthook(self, ex_type, ex_value, ex_traceback):
         '''Log uncaught exceptions to the session log, so they are not lost when running without a console.'''
         tb = ''.join(traceback.format_exception(ex_type, ex_value, ex_traceback))
@@ -705,6 +718,16 @@ class GUI_main(QtWidgets.QMainWindow):
             self.send_button.setStyleSheet("background-color : blue")
             self.send_button.setText('Acquiring')
             self.state = 'recording'
+
+
+def scope_finished(xml):
+    '''True if Prairie View has finished the T-series: the XML ends with the closing PVScan tag.'''
+    try:
+        with open(xml, 'rb') as f:
+            f.seek(max(0, xml.stat().st_size - 64))
+            return b'</PVScan>' in f.read()
+    except FileNotFoundError:
+        return False
 
 
 class logger:
