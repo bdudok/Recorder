@@ -12,7 +12,7 @@ The video-EEG recorder for the Pinnacle setups (VideoEEG, EEG-Cam, ClosedLoop_Pi
 - `Camera/CamGUI.py`: preview and recording for the externally triggered ToupCam behavior camera.
 - `OptoTrigger/Stim_StateMachine*`: Arduino sketches for the closed-loop optogenetics accessory board.
   `OptoTrigger/serial_send.py` sends stimulation settings to it (configs in that file).
-- `dev_scripts/`: hardware checks for the camera, not used by the apps. See the top of each script.
+- `dev_scripts/`: hardware checks for the camera and PrairieLink, not used by the apps. See the top of each script.
 - `tests/`: pytest tests (`uv run pytest`). Scripts outside this folder should not have "test" in their names.
 
 The treadmill runs on our pyControl fork, [bdudok/PyControl_LNCM](https://github.com/bdudok/PyControl_LNCM).
