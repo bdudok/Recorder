@@ -317,3 +317,15 @@ def test_stops_when_scope_finishes(recorder, servers, prairie_link, app):
     prairie_link.SendScriptCommands.assert_any_call('-Abort')
     for server in servers.values():
         assert server.commands() == ['set', 'go', 'stop']
+
+
+def test_record_button_shows_time_since_start(recorder, servers, app):
+    recorder.checkboxes['scope'].setChecked(False)
+    press(recorder)
+    press(recorder)
+    assert recorder.send_button.text() == 'Acquiring 0:00'
+    pump(app, 1.5)
+    assert recorder.send_button.text() == 'Acquiring 0:01'
+    press(recorder)
+    assert not recorder.elapsed_timer.isActive()
+    assert recorder.send_button.text() == 'Ready'

@@ -94,6 +94,11 @@ class GUI_main(QtWidgets.QMainWindow):
         self.scope_check_timer = QtCore.QTimer(self)
         self.scope_check_timer.setInterval(5000)
         self.scope_check_timer.timeout.connect(self.check_scope)
+        # shows the time since the start on the record button
+        self.recording_start = None
+        self.elapsed_timer = QtCore.QTimer(self)
+        self.elapsed_timer.setInterval(1000)
+        self.elapsed_timer.timeout.connect(self.show_elapsed)
 
         # tabs
         self.table_widget = QtWidgets.QWidget(self)  # central widget
@@ -537,6 +542,7 @@ class GUI_main(QtWidgets.QMainWindow):
             success = True
             message = {'go': True}
             self.send_button.setText('Starting...')
+            self.recording_start = None
             for sname in self.start_socket_order:
                 if self.checkboxes[sname].isChecked():
                     if sname not in ('scope',):
@@ -549,6 +555,8 @@ class GUI_main(QtWidgets.QMainWindow):
                         time.sleep(0.5)  # wait for everything else to start
                     if go:
                         self.log.w(sname + ' running')
+                        if self.recording_start is None:
+                            self.recording_start = time.monotonic()
                     else:
                         success = False
                         print('Failed starting', sname)
@@ -574,6 +582,10 @@ class GUI_main(QtWidgets.QMainWindow):
                     self.autostop_timer.start(int(timeout*1000*60))
                 if self.checkboxes['scope'].isChecked():
                     self.scope_check_timer.start()
+                if self.recording_start is None:  # no device reported running
+                    self.recording_start = time.monotonic()
+                self.elapsed_timer.start()
+                self.show_elapsed()
                 # after everything is started fine, create entry in BaseRow
                 if self.sdat is not None:
                     self.put_baserow_entry()
@@ -584,6 +596,7 @@ class GUI_main(QtWidgets.QMainWindow):
             # stop all connections
             self.autostop_timer.stop()
             self.scope_check_timer.stop()
+            self.elapsed_timer.stop()
             self.log.w('stopping')
             message = {'stop': True}
             for sname in self.stop_socket_order:
@@ -672,6 +685,10 @@ class GUI_main(QtWidgets.QMainWindow):
         if self.state == 'recording':
             self.log.w('auto stop')
             self.send()
+
+    def show_elapsed(self):
+        minutes, seconds = divmod(round(time.monotonic() - self.recording_start), 60)
+        self.send_button.setText(f'Acquiring {minutes}:{seconds:02d}')
 
     def check_scope(self):
         if self.state == 'recording' and scope_finished(self.scope_xml):
